@@ -17,14 +17,29 @@ interface DistributionChartProps {
   distribution: AssetDistribution
 }
 
+interface DistributionTooltipItem {
+  name: string
+  value: number
+  payload: {
+    pct?: number
+  }
+}
+
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: DistributionTooltipItem[]
+}
+
 function formatValue(v: number) {
   return `NT$${v.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
   if (!active || !payload?.length) return null
+
   const item = payload[0]
+  if (!item) return null
+
   return (
     <div className="card px-3 py-2 shadow-lg text-sm">
       <p className="font-medium">{item.name}</p>
@@ -38,11 +53,11 @@ export function DistributionChart({ distribution }: DistributionChartProps) {
   const total = distribution.cash + distribution.stocks.reduce((s, x) => s + x.value, 0)
 
   const data = [
-    { name: '現金', value: distribution.cash, pct: (distribution.cash / total) * 100 },
+    { name: '現金', value: distribution.cash, pct: total > 0 ? (distribution.cash / total) * 100 : 0 },
     ...distribution.stocks.map(s => ({
       name: s.name || s.stock,
       value: s.value,
-      pct: (s.value / total) * 100,
+      pct: total > 0 ? (s.value / total) * 100 : 0,
     })),
   ].filter(d => d.value > 0)
 
