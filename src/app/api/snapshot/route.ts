@@ -1,82 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server'
-import {
-  getDailySnapshots,
-  getHoldings,
-  getCashflows,
-  writeSnapshot,
-  getTransactions,
-} from '@/lib/notion/queries'
-import { getPrices } from '@/lib/prices/cache'
-import { enrichHoldings, calcCash, buildPortfolioSummary, calcRealizedPnl } from '@/lib/calculator'
+import { NextResponse } from 'next/server'
+import { getDailySnapshots } from '@/lib/notion/queries'
 
 export const runtime = 'nodejs'
 export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
-// GET — 取得歷史快照（給圖表用）
+// 只讀歷史快照給前端圖表，不做寫入
 export async function GET() {
   try {
     const snapshots = await getDailySnapshots(90)
-    return NextResponse.json({ data: snapshots, timestamp: new Date().toISOString() })
-  } catch (error) {
-    console.error('[/api/snapshot GET]', error)
+    return NextResponse.json({
+      data: snapshots,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[/api/snapshot]', msg)
     return NextResponse.json(
       { error: '無法取得快照資料', data: [], timestamp: new Date().toISOString() },
       { status: 500 }
     )
   }
 }
+import { NextResponse } from 'next/server'
+import { getDailySnapshots } from '@/lib/notion/queries'
 
-// POST — Vercel Cron 或手動觸發寫入今日快照
-export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization')
-  if (process.env.NODE_ENV === 'production' && process.env.CRON_SECRET) {
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: '未授權' }, { status: 401 })
-    }
-  }
+export const runtime = 'nodejs'
+export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
+// 只讀歷史快照給前端圖表，不做寫入
+export async function GET() {
   try {
-    const today = new Date().toISOString().split('T')[0]
-
-    const [holdings, cashflows, transactions, snapshots] = await Promise.all([
-      getHoldings(),
-      getCashflows(),
-      getTransactions(),
-      getDailySnapshots(30),
-    ])
-
-    const cash = calcCash(cashflows)
-    const realizedPnl = calcRealizedPnl(transactions)
-
-    const priceInputs = holdings.map(h => ({
-      symbol: h.stock,
-      market: h.market,
-      fallbackPrice: h.avgCost,
-    }))
-    const prices = await getPrices(priceInputs)
-    const enriched = enrichHoldings(holdings, prices)
-    const stockValue = enriched.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
-    const summary = buildPortfolioSummary(enriched, cash, snapshots, realizedPnl)
-
-    await writeSnapshot({
-      date: today,
-      cash,
-      stockValue,
-      totalAsset: summary.totalAsset,
-      dailyPnl: summary.todayChange,
-      note: `自動快照 ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`,
-    })
-
+    const snapshots = await getDailySnapshots(90)
     return NextResponse.json({
-      success: true,
-      date: today,
-      totalAsset: summary.totalAsset,
+      data: snapshots,
       timestamp: new Date().toISOString(),
     })
-  } catch (error) {
-    console.error('[/api/snapshot POST]', error)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[/api/snapshot]', msg)
     return NextResponse.json(
-      { error: '快照寫入失敗', timestamp: new Date().toISOString() },
+      { error: '無法取得快照資料', data: [], timestamp: new Date().toISOString() },
       { status: 500 }
     )
   }
