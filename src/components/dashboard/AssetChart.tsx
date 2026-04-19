@@ -16,6 +16,13 @@ interface AssetChartProps {
   snapshots: DailySnapshot[]
 }
 
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: Array<{
+    payload: DailySnapshot
+  }>
+}
+
 function formatYAxis(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`
@@ -29,10 +36,11 @@ function formatDate(dateStr: string): string {
   return `${parts[1]}/${parts[2]}`
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
   if (!active || !payload?.length) return null
-  const d = payload[0]?.payload as DailySnapshot
+  const d = payload[0]?.payload
+
+  if (!d) return null
 
   return (
     <div className="card px-4 py-3 shadow-lg text-sm min-w-[160px]">
@@ -51,14 +59,14 @@ function CustomTooltip({ active, payload }: any) {
           </span>
         </div>
         {d.dailyPnl !== 0 && (
-          <div className={cn(
-            'flex justify-between gap-4 pt-1 border-t border-border',
-          )}>
+          <div className={cn('flex justify-between gap-4 pt-1 border-t border-border')}>
             <span className="text-muted-foreground">當日損益</span>
-            <span className={cn(
-              'tabular-nums font-medium',
-              d.dailyPnl >= 0 ? 'text-positive' : 'text-negative'
-            )}>
+            <span
+              className={cn(
+                'tabular-nums font-medium',
+                d.dailyPnl >= 0 ? 'text-positive' : 'text-negative'
+              )}
+            >
               {d.dailyPnl >= 0 ? '+' : ''}
               {d.dailyPnl.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
             </span>
