@@ -3,8 +3,8 @@ import { getNotionClient, DB_IDS } from './client'
 import { getText, getNumber, getSelect, getDate } from './helpers'
 import type { Transaction, Cashflow, Holding, DailySnapshot } from '@/types'
 
-// ─── 查詢所有頁面（自動分頁） ─────────────────────────
-async function queryAll(dbId: string, filter?: object, sorts?: object[]) {
+// ─── 通用：自動分頁查全部 ─────────────────────────────
+async function queryAll(dbId: string, sorts?: object[]): Promise<PageObjectResponse[]> {
   const notion = getNotionClient()
   const results: PageObjectResponse[] = []
   let cursor: string | undefined
@@ -12,7 +12,6 @@ async function queryAll(dbId: string, filter?: object, sorts?: object[]) {
   do {
     const response = await notion.databases.query({
       database_id: dbId,
-      filter: filter as never,
       sorts: sorts as never,
       start_cursor: cursor,
       page_size: 100,
@@ -29,9 +28,7 @@ export async function getTransactions(): Promise<Transaction[]> {
   const dbId = DB_IDS.transactions
   if (!dbId) return []
 
-  const pages = await queryAll(dbId, undefined, [
-    { property: '日期', direction: 'descending' },
-  ])
+  const pages = await queryAll(dbId, [{ property: '日期', direction: 'descending' }])
 
   return pages.map(page => {
     const p = page.properties
@@ -54,9 +51,7 @@ export async function getCashflows(): Promise<Cashflow[]> {
   const dbId = DB_IDS.cashflow
   if (!dbId) return []
 
-  const pages = await queryAll(dbId, undefined, [
-    { property: '日期', direction: 'descending' },
-  ])
+  const pages = await queryAll(dbId, [{ property: '日期', direction: 'descending' }])
 
   return pages.map(page => {
     const p = page.properties
@@ -93,19 +88,26 @@ export async function getHoldings(): Promise<Holding[]> {
   })
 }
 
-// ─── 每日資產快照 ─────────────────────────────────────
+// ─── 每日資產快照（讀取）─────────────────────────────
+// 已確認 schema：「日期」欄位為 title 類型
+// title 格式：「YYYY-MM-DD 快照」→ 解析前 10 字元為日期
+function parseDateFromTitle(raw: string): string {
+  const m = raw.match(/(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1] : raw
+}
+
 export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
   const dbId = DB_IDS.snapshot
   if (!dbId) return []
 
-  // 先取全部，依日期 title 排序（因為 title 不能直接排序）
   const pages = await queryAll(dbId)
 
   const snapshots: DailySnapshot[] = pages.map(page => {
     const p = page.properties
+    const rawTitle = getText(p['日期'])
     return {
       id: page.id,
-      date: getText(p['日期']),
+      date: parseDateFromTitle(rawTitle),
       cash: getNumber(p['現金資產']),
       stockValue: getNumber(p['股票市值']),
       totalAsset: getNumber(p['總資產']),
@@ -114,38 +116,64 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
     }
   })
 
-  // 按日期排序（降序），取前 limit 筆
   return snapshots
-    .filter(s => s.date)
+    .filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s.date))
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, limit)
 }
 
-// ─── 最新快照 ─────────────────────────────────────────
 export async function getLatestSnapshot(): Promise<DailySnapshot | null> {
-  const snapshots = await getDailySnapshots(1)
-  return snapshots[0] ?? null
+  const list = await getDailySnapshots(1)
+  return list[0] ?? null
 }
 
-// ─── 寫入每日快照 ─────────────────────────────────────
-export async function writeSnapshot(snapshot: Omit<DailySnapshot, 'id'>): Promise<void> {
+// ─── upsertSnapshot：以「YYYY-MM-DD 快照」為 key，防重複 ──
+export async function upsertSnapshot(
+  snapshot: Omit<DailySnapshot, 'id'>
+): Promise<'created' | 'updated'> {
   const notion = getNotionClient()
   const dbId = DB_IDS.snapshot
   if (!dbId) throw new Error('NOTION_DB_SNAPSHOT 未設定')
 
+  const titleValue = `${snapshot.date} 快照`
+
+  // 查詢同一天是否已有記錄
+  const existing = await notion.databases.query({
+    database_id: dbId,
+    filter: {
+      property: '日期',
+      title: { equals: titleValue },
+    },
+    page_size: 1,
+  })
+
+  const numericProps = {
+    現金資產: { number: snapshot.cash },
+    股票市值: { number: snapshot.stockValue },
+    總資產: { number: snapshot.totalAsset },
+    當日損益: { number: snapshot.dailyPnl },
+    備註: { rich_text: [{ text: { content: snapshot.note } }] },
+  }
+
+  if (existing.results.length > 0) {
+    await notion.pages.update({
+      page_id: existing.results[0].id,
+      properties: numericProps,
+    })
+    return 'updated'
+  }
+
   await notion.pages.create({
     parent: { database_id: dbId },
     properties: {
-      日期: {
-        title: [{ text: { content: snapshot.date } }],
-      },
-      現金資產: { number: snapshot.cash },
-      股票市值: { number: snapshot.stockValue },
-      總資產: { number: snapshot.totalAsset },
-      當日損益: { number: snapshot.dailyPnl },
-      備註: {
-        rich_text: [{ text: { content: snapshot.note } }],
-      },
+      日期: { title: [{ text: { content: titleValue } }] },
+      ...numericProps,
     },
   })
+  return 'created'
+}
+
+// 舊名稱相容
+export async function writeSnapshot(snapshot: Omit<DailySnapshot, 'id'>): Promise<void> {
+  await upsertSnapshot(snapshot)
 }
