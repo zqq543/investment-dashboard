@@ -2,8 +2,8 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/snapshot",
-      "schedule": "0 9 * * 1-5"
+      "path": "/api/cron/snapshot",
+      "schedule": "0 23 * * 1-5"
     }
   ]
 }
