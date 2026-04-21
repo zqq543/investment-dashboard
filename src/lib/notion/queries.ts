@@ -8,6 +8,7 @@ async function queryAll(dbId: string, sorts?: object[]): Promise<PageObjectRespo
   const notion = getNotionClient()
   const results: PageObjectResponse[] = []
   let cursor: string | undefined
+
   do {
     const response = await notion.databases.query({
       database_id: dbId,
@@ -18,6 +19,7 @@ async function queryAll(dbId: string, sorts?: object[]): Promise<PageObjectRespo
     results.push(...(response.results as PageObjectResponse[]))
     cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined
   } while (cursor)
+
   return results
 }
 
@@ -25,7 +27,9 @@ async function queryAll(dbId: string, sorts?: object[]): Promise<PageObjectRespo
 export async function getTransactions(): Promise<Transaction[]> {
   const dbId = DB_IDS.transactions
   if (!dbId) return []
+
   const pages = await queryAll(dbId, [{ property: '日期', direction: 'descending' }])
+
   return pages.map(page => {
     const p = page.properties
     return {
@@ -46,7 +50,9 @@ export async function getTransactions(): Promise<Transaction[]> {
 export async function getCashflows(): Promise<Cashflow[]> {
   const dbId = DB_IDS.cashflow
   if (!dbId) return []
+
   const pages = await queryAll(dbId, [{ property: '日期', direction: 'descending' }])
+
   return pages.map(page => {
     const p = page.properties
     return {
@@ -64,7 +70,9 @@ export async function getCashflows(): Promise<Cashflow[]> {
 export async function getHoldings(): Promise<Holding[]> {
   const dbId = DB_IDS.holdings
   if (!dbId) return []
+
   const pages = await queryAll(dbId)
+
   return pages.map(page => {
     const p = page.properties
     return {
@@ -86,6 +94,23 @@ function parseDateFromTitle(raw: string): string {
   return m ? m[1] : ''
 }
 
+// ─── 從 title 建立可比較的排序鍵────────────────────────
+// 支援：
+//   2026-04-19 快照           -> 2026-04-19 23:59
+//   2026-04-19 14:30 快照     -> 2026-04-19 14:30
+function buildSnapshotSortKey(raw: string): string {
+  const m = raw.match(/(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?/)
+  if (!m) return ''
+
+  const [, date, time] = m
+  return `${date} ${time ?? '23:59'}`
+}
+
+type SnapshotWithMeta = DailySnapshot & {
+  rawTitle: string
+  sortKey: string
+}
+
 // ─── 每日資產快照（讀取）─────────────────────────────
 // 支援所有格式：
 //   「2026-04-19 快照」（daily）
@@ -98,17 +123,20 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
 
   const pages = await queryAll(dbId)
 
-  // 解析所有記錄，過濾掉沒有日期的
-  const all: DailySnapshot[] = pages
+  const all: SnapshotWithMeta[] = pages
     .map(page => {
       const p = page.properties
       const raw = getText(p['日期'])
       const date = parseDateFromTitle(raw)
-      if (!date) return null
+      const sortKey = buildSnapshotSortKey(raw)
+
+      if (!date || !sortKey) return null
+
       return {
         id: page.id,
         date,
         rawTitle: raw,
+        sortKey,
         cash: getNumber(p['現金資產']),
         stockValue: getNumber(p['股票市值']),
         totalAsset: getNumber(p['總資產']),
@@ -116,22 +144,21 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
         note: getText(p['備註']),
       }
     })
-    .filter((s): s is DailySnapshot & { rawTitle: string } => s !== null && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
+    .filter((s): s is SnapshotWithMeta => s !== null && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
 
-  // 每天只保留「最後一筆」（依 rawTitle 排序，時間越晚越後）
-  const byDate = new Map<string, DailySnapshot & { rawTitle: string }>()
+  // 每天只保留最後一筆
+  const byDate = new Map<string, SnapshotWithMeta>()
   for (const snap of all) {
     const existing = byDate.get(snap.date)
-    if (!existing || snap.rawTitle > existing.rawTitle) {
+    if (!existing || snap.sortKey > existing.sortKey) {
       byDate.set(snap.date, snap)
     }
   }
 
-  // 轉成陣列，降序排列，取 limit 筆
   return Array.from(byDate.values())
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, limit)
-    .map(({ rawTitle: _raw, ...rest }) => rest)
+    .map(({ rawTitle: _raw, sortKey: _sortKey, ...rest }) => rest)
 }
 
 export async function getLatestSnapshot(): Promise<DailySnapshot | null> {
@@ -164,7 +191,10 @@ export async function upsertSnapshot(
   }
 
   if (existing.results.length > 0) {
-    await notion.pages.update({ page_id: existing.results[0].id, properties: numericProps })
+    await notion.pages.update({
+      page_id: existing.results[0].id,
+      properties: numericProps,
+    })
     return 'updated'
   }
 
@@ -175,6 +205,7 @@ export async function upsertSnapshot(
       ...numericProps,
     },
   })
+
   return 'created'
 }
 
@@ -209,7 +240,10 @@ export async function upsertIntradaySnapshot(snapshot: {
   }
 
   if (existing.results.length > 0) {
-    await notion.pages.update({ page_id: existing.results[0].id, properties: numericProps })
+    await notion.pages.update({
+      page_id: existing.results[0].id,
+      properties: numericProps,
+    })
   } else {
     await notion.pages.create({
       parent: { database_id: dbId },
