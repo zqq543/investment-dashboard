@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils'
 import type { DailySnapshot } from '@/types'
 
+// ─── 時間範圍設定 ─────────────────────────────────────
 type RangeKey = '1W' | '1M' | '1Y' | 'ALL'
 
 const RANGES: { key: RangeKey; label: string; days: number | null }[] = [
@@ -31,11 +32,12 @@ function fmtAxis(v: number): string {
   return String(v)
 }
 
-function fmtDate(s: string, range: RangeKey): string {
-  const p = s.split('-')
-  if (p.length < 3) return s
-  if (range === '1W' || range === '1M') return `${p[1]}/${p[2]}`
-  return `${p[0].slice(2)}/${p[1]}`
+function fmtTickDate(dateStr: string, range: RangeKey): string {
+  // dateStr 格式是 YYYY-MM-DD
+  const p = dateStr.split('-')
+  if (p.length < 3) return dateStr
+  if (range === '1W' || range === '1M') return `${p[1]}/${p[2]}`  // MM/DD
+  return `${p[0].slice(2)}/${p[1]}`                                 // YY/MM
 }
 
 function calcPeriodStats(data: DailySnapshot[]): { pnl: number; pct: number } {
@@ -45,6 +47,7 @@ function calcPeriodStats(data: DailySnapshot[]): { pnl: number; pct: number } {
   return { pnl, pct }
 }
 
+// ─── Tooltip ──────────────────────────────────────────
 interface TooltipProps {
   active?: boolean
   payload?: { payload: DailySnapshot }[]
@@ -55,7 +58,7 @@ function ChartTooltip({ active, payload }: TooltipProps) {
   const d = payload[0]?.payload
   if (!d) return null
   return (
-    <div className="card px-3 py-2.5 shadow-lg text-sm min-w-[165px]">
+    <div className="card px-3 py-2.5 shadow-lg text-sm min-w-[160px]">
       <p className="text-muted-foreground mb-1.5 text-xs">{d.date}</p>
       <div className="space-y-0.5">
         <div className="flex justify-between gap-3">
@@ -72,7 +75,7 @@ function ChartTooltip({ active, payload }: TooltipProps) {
               d.dailyPnl >= 0 ? 'text-positive' : 'text-negative'
             )}>
               {d.dailyPnl >= 0 ? '+' : ''}
-              {d.dailyPnl.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
+              NT${Math.abs(d.dailyPnl).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
             </span>
           </div>
         )}
@@ -81,13 +84,8 @@ function ChartTooltip({ active, payload }: TooltipProps) {
   )
 }
 
-function RangeSelector({
-  current,
-  onChange,
-}: {
-  current: RangeKey
-  onChange: (k: RangeKey) => void
-}) {
+// ─── 篩選按鈕 ─────────────────────────────────────────
+function RangeSelector({ current, onChange }: { current: RangeKey; onChange: (k: RangeKey) => void }) {
   return (
     <div className="flex items-center gap-0.5">
       {RANGES.map(r => (
@@ -108,39 +106,29 @@ function RangeSelector({
   )
 }
 
-function PeriodSummary({
-  data,
-  rangeLabel,
-}: {
-  data: DailySnapshot[]
-  rangeLabel: string
-}) {
+// ─── 期間損益摘要 ─────────────────────────────────────
+function PeriodPnl({ data, label }: { data: DailySnapshot[]; label: string }) {
   const { pnl, pct } = calcPeriodStats(data)
-  if (data.length < 2) return null
+  if (data.length < 2) return <div className="h-5" />
   const isPos = pnl >= 0
-
   return (
-    <div className="flex items-center gap-2 mb-2 min-h-[1.4rem]">
-      <span className="text-xs text-muted-foreground">{rangeLabel}損益</span>
-      <span className={cn(
-        'text-sm font-semibold tabular-nums',
-        isPos ? 'text-positive' : 'text-negative'
-      )}>
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-xs text-muted-foreground">{label}損益</span>
+      <span className={cn('text-sm font-semibold tabular-nums', isPos ? 'text-positive' : 'text-negative')}>
         {isPos ? '+' : ''}NT${Math.abs(pnl).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
       </span>
-      <span className={cn(
-        'text-xs tabular-nums opacity-80',
-        isPos ? 'text-positive' : 'text-negative'
-      )}>
+      <span className={cn('text-xs tabular-nums opacity-75', isPos ? 'text-positive' : 'text-negative')}>
         ({isPos ? '+' : ''}{pct.toFixed(2)}%)
       </span>
     </div>
   )
 }
 
+// ─── 主元件 ───────────────────────────────────────────
 export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
   const [range, setRange] = useState<RangeKey>('1W')
 
+  // snapshots 從 API 傳來是升序（date asc）
   const sorted = useMemo(
     () => [...snapshots].sort((a, b) => a.date.localeCompare(b.date)),
     [snapshots]
@@ -153,33 +141,26 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
 
   const rangeLabel = RANGES.find(r => r.key === range)?.label ?? ''
 
-  const header = (
-    <div className="flex items-center justify-between mb-2">
-      <h2 className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
-        資產曲線
-      </h2>
-      <RangeSelector current={range} onChange={setRange} />
-    </div>
-  )
-
-  if (sorted.length === 0) {
-    return (
-      <div>
-        {header}
-        <div className="flex items-center justify-center h-48 text-muted-foreground text-sm text-center px-4">
-          尚無歷史資料<br />
-          <span className="text-xs opacity-60 mt-1 block">每個交易日早上 07:00 自動寫入</span>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div>
-      {header}
-      <PeriodSummary data={filtered} rangeLabel={rangeLabel} />
-      {filtered.length === 0 ? (
-        <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+      {/* 標題 + 篩選器 */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
+          資產曲線
+        </p>
+        <RangeSelector current={range} onChange={setRange} />
+      </div>
+
+      {/* 期間損益 */}
+      <PeriodPnl data={filtered} label={rangeLabel} />
+
+      {sorted.length === 0 ? (
+        <div className="flex items-center justify-center h-44 text-muted-foreground text-sm text-center">
+          尚無歷史資料<br />
+          <span className="text-xs opacity-60 mt-1 block">每個交易日早上 07:00 自動更新</span>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex items-center justify-center h-44 text-muted-foreground text-sm">
           此區間尚無資料
         </div>
       ) : (
@@ -192,15 +173,10 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
                   <stop offset="95%" stopColor="hsl(221,83%,53%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="hsl(var(--border))"
-                vertical={false}
-                opacity={0.5}
-              />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.5} />
               <XAxis
                 dataKey="date"
-                tickFormatter={s => fmtDate(s, range)}
+                tickFormatter={s => fmtTickDate(s, range)}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 axisLine={false} tickLine={false}
                 interval="preserveStartEnd" minTickGap={40}
@@ -219,9 +195,7 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
               />
             </AreaChart>
           </ResponsiveContainer>
-          <p className="text-right text-xs text-muted-foreground mt-0.5 pr-1">
-            {filtered.length} 筆
-          </p>
+          <p className="text-right text-xs text-muted-foreground mt-0.5 pr-1">{filtered.length} 筆</p>
         </div>
       )}
     </div>
