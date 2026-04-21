@@ -1,17 +1,20 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import {
+  AreaChart, Area, XAxis, YAxis,
+  Tooltip, ResponsiveContainer, CartesianGrid,
+} from 'recharts'
 import { cn } from '@/lib/utils'
 import type { DailySnapshot } from '@/types'
 
 type RangeKey = '1W' | '1M' | '1Y' | 'ALL'
 
 const RANGES: { key: RangeKey; label: string; days: number | null }[] = [
-  { key: '1W',  label: '每週',  days: 7   },
-  { key: '1M',  label: '每月',  days: 30  },
-  { key: '1Y',  label: '每年',  days: 365 },
-  { key: 'ALL', label: '全部',  days: null },
+  { key: '1W',  label: '每週', days: 7   },
+  { key: '1M',  label: '每月', days: 30  },
+  { key: '1Y',  label: '每年', days: 365 },
+  { key: 'ALL', label: '全部', days: null },
 ]
 
 function filterByRange(snapshots: DailySnapshot[], days: number | null): DailySnapshot[] {
@@ -35,9 +38,11 @@ function fmtDate(s: string, range: RangeKey): string {
   return `${p[0].slice(2)}/${p[1]}`
 }
 
-function calcPeriodPnl(data: DailySnapshot[]): number {
-  if (data.length < 2) return 0
-  return data[data.length - 1].totalAsset - data[0].totalAsset
+function calcPeriodStats(data: DailySnapshot[]): { pnl: number; pct: number } {
+  if (data.length < 2) return { pnl: 0, pct: 0 }
+  const pnl = data[data.length - 1].totalAsset - data[0].totalAsset
+  const pct = data[0].totalAsset > 0 ? (pnl / data[0].totalAsset) * 100 : 0
+  return { pnl, pct }
 }
 
 interface TooltipProps {
@@ -50,7 +55,7 @@ function ChartTooltip({ active, payload }: TooltipProps) {
   const d = payload[0]?.payload
   if (!d) return null
   return (
-    <div className="card px-3 py-2.5 shadow-lg text-sm min-w-[160px]">
+    <div className="card px-3 py-2.5 shadow-lg text-sm min-w-[165px]">
       <p className="text-muted-foreground mb-1.5 text-xs">{d.date}</p>
       <div className="space-y-0.5">
         <div className="flex justify-between gap-3">
@@ -103,18 +108,22 @@ function RangeSelector({
   )
 }
 
-function PeriodSummary({ data, rangeLabel }: { data: DailySnapshot[]; rangeLabel: string }) {
+function PeriodSummary({
+  data,
+  rangeLabel,
+}: {
+  data: DailySnapshot[]
+  rangeLabel: string
+}) {
+  const { pnl, pct } = calcPeriodStats(data)
   if (data.length < 2) return null
-  const pnl = calcPeriodPnl(data)
-  const startAsset = data[0].totalAsset
-  const pct = startAsset > 0 ? (pnl / startAsset) * 100 : 0
   const isPos = pnl >= 0
 
   return (
-    <div className="flex items-center gap-2 mb-2">
+    <div className="flex items-center gap-2 mb-2 min-h-[1.4rem]">
       <span className="text-xs text-muted-foreground">{rangeLabel}損益</span>
       <span className={cn(
-        'text-xs font-semibold tabular-nums',
+        'text-sm font-semibold tabular-nums',
         isPos ? 'text-positive' : 'text-negative'
       )}>
         {isPos ? '+' : ''}NT${Math.abs(pnl).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
@@ -142,7 +151,7 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
     return filterByRange(sorted, r.days)
   }, [sorted, range])
 
-  const currentRangeLabel = RANGES.find(r => r.key === range)?.label ?? ''
+  const rangeLabel = RANGES.find(r => r.key === range)?.label ?? ''
 
   const header = (
     <div className="flex items-center justify-between mb-2">
@@ -157,8 +166,9 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
     return (
       <div>
         {header}
-        <div className="flex items-center justify-center h-44 text-muted-foreground text-sm text-center px-4">
-          尚無歷史資料
+        <div className="flex items-center justify-center h-48 text-muted-foreground text-sm text-center px-4">
+          尚無歷史資料<br />
+          <span className="text-xs opacity-60 mt-1 block">每個交易日早上 07:00 自動寫入</span>
         </div>
       </div>
     )
@@ -167,10 +177,10 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
   return (
     <div>
       {header}
-      <PeriodSummary data={filtered} rangeLabel={currentRangeLabel} />
+      <PeriodSummary data={filtered} rangeLabel={rangeLabel} />
       {filtered.length === 0 ? (
-        <div className="flex items-center justify-center h-44 text-muted-foreground text-sm">
-          此區間無資料
+        <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+          此區間尚無資料
         </div>
       ) : (
         <div className="w-full overflow-hidden">
@@ -192,33 +202,25 @@ export function AssetChart({ snapshots }: { snapshots: DailySnapshot[] }) {
                 dataKey="date"
                 tickFormatter={s => fmtDate(s, range)}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
-                minTickGap={40}
+                axisLine={false} tickLine={false}
+                interval="preserveStartEnd" minTickGap={40}
               />
               <YAxis
                 tickFormatter={fmtAxis}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                axisLine={false}
-                tickLine={false}
-                width={52}
+                axisLine={false} tickLine={false} width={52}
               />
               <Tooltip content={<ChartTooltip />} />
               <Area
-                type="monotone"
-                dataKey="totalAsset"
-                name="總資產"
-                stroke="hsl(221,83%,53%)"
-                strokeWidth={2}
-                fill="url(#totalGrad)"
-                dot={false}
+                type="monotone" dataKey="totalAsset" name="總資產"
+                stroke="hsl(221,83%,53%)" strokeWidth={2}
+                fill="url(#totalGrad)" dot={false}
                 activeDot={{ r: 4, strokeWidth: 0, fill: 'hsl(221,83%,53%)' }}
               />
             </AreaChart>
           </ResponsiveContainer>
           <p className="text-right text-xs text-muted-foreground mt-0.5 pr-1">
-            {filtered.length} 筆資料
+            {filtered.length} 筆
           </p>
         </div>
       )}
