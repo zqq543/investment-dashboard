@@ -1,10 +1,6 @@
 import type {
-  Transaction,
-  Cashflow,
-  Holding,
-  DailySnapshot,
-  PortfolioSummary,
-  AssetDistribution,
+  Transaction, Cashflow, Holding,
+  DailySnapshot, PortfolioSummary, AssetDistribution,
 } from '@/types'
 import type { PriceData } from '@/types'
 import { getDefaultUsdTwdRate } from './prices/types'
@@ -54,11 +50,9 @@ export function calcRealizedPnl(
   const buyQueue: Map<string, { price: number; shares: number; currency: string }[]> = new Map()
   let totalPnl = 0
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date))
-
   for (const tx of sorted) {
     const key = `${tx.stock}_${tx.market}`
     const currency = tx.market === '台股' ? 'TWD' : 'USD'
-
     if (tx.type === '買入') {
       if (!buyQueue.has(key)) buyQueue.set(key, [])
       buyQueue.get(key)!.push({ price: tx.price, shares: tx.shares, currency })
@@ -82,10 +76,11 @@ export function calcRealizedPnl(
 }
 
 // ─── 建立投資組合摘要 ─────────────────────────────────
+// snapshots 傳入時是「降序」（最新在前）
 export function buildPortfolioSummary(
   holdings: Holding[],
   cash: number,
-  snapshots: DailySnapshot[], // 降序排列（最新在前）
+  snapshots: DailySnapshot[],
   realizedPnl: number
 ): PortfolioSummary {
   const stockValue = holdings.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
@@ -94,28 +89,44 @@ export function buildPortfolioSummary(
 
   const today = new Date().toISOString().split('T')[0]
 
-  // ─ 今日變動：用「最近一筆昨天或更早的快照」作基準
+  // ─ 今日變動：用「今天之前最近一筆快照」作基準
+  // 如果 snapshots 有今天的（盤中快照每天取最後一筆），要找昨天的
   const prevSnap = snapshots.find(s => s.date < today)
-  const todayChange = prevSnap ? totalAsset - prevSnap.totalAsset : 0
-  const todayChangePct = prevSnap && prevSnap.totalAsset > 0
-    ? (todayChange / prevSnap.totalAsset) * 100 : 0
+  const todaySnap = snapshots.find(s => s.date === today)
 
-  // ─ 本週變動：7 天前或更早的快照
+  // 若有今天的快照，今日變動 = 現在 - 今天快照的起點（用前一天）
+  // 若無今天快照，今日變動 = 現在 - 前一天快照
+  const baseForToday = prevSnap
+  const todayChange = baseForToday ? totalAsset - baseForToday.totalAsset : 0
+  const todayChangePct = baseForToday && baseForToday.totalAsset > 0
+    ? (todayChange / baseForToday.totalAsset) * 100 : 0
+
+  // ─ 本週變動：7 天前或更早
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weekAgoStr = weekAgo.toISOString().split('T')[0]
   const weekSnap = snapshots.find(s => s.date <= weekAgoStr)
-  const weekChange = weekSnap ? totalAsset - weekSnap.totalAsset : 0
-  const weekChangePct = weekSnap && weekSnap.totalAsset > 0
-    ? (weekChange / weekSnap.totalAsset) * 100 : 0
+  const weekChange = weekSnap ? totalAsset - weekSnap.totalAsset : (
+    // 若沒有 7 天前的，用最舊的快照
+    snapshots.length > 0 ? totalAsset - snapshots[snapshots.length - 1].totalAsset : 0
+  )
+  const weekBase = weekSnap ?? snapshots[snapshots.length - 1]
+  const weekChangePct = weekBase && weekBase.totalAsset > 0
+    ? (weekChange / weekBase.totalAsset) * 100 : 0
 
-  // ─ 本月變動：找本月第一天之前的快照
+  // ─ 本月變動：本月第一天之前
   const now = new Date()
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const monthSnap = snapshots.find(s => s.date < monthStart)
-  const monthChange = monthSnap ? totalAsset - monthSnap.totalAsset : 0
-  const monthChangePct = monthSnap && monthSnap.totalAsset > 0
-    ? (monthChange / monthSnap.totalAsset) * 100 : 0
+  const monthChange = monthSnap ? totalAsset - monthSnap.totalAsset : (
+    snapshots.length > 0 ? totalAsset - snapshots[snapshots.length - 1].totalAsset : 0
+  )
+  const monthBase = monthSnap ?? snapshots[snapshots.length - 1]
+  const monthChangePct = monthBase && monthBase.totalAsset > 0
+    ? (monthChange / monthBase.totalAsset) * 100 : 0
+
+  // 今日快照的損益（給 dashboard 顯示用）
+  const dailyPnlFromSnap = todaySnap?.dailyPnl ?? todayChange
 
   return {
     totalAsset,
@@ -134,53 +145,31 @@ export function buildPortfolioSummary(
 }
 
 // ─── 資產分布 ─────────────────────────────────────────
-export function buildAssetDistribution(
-  holdings: Holding[],
-  cash: number
-): AssetDistribution {
+export function buildAssetDistribution(holdings: Holding[], cash: number): AssetDistribution {
   return {
     cash,
     stocks: holdings
       .filter(h => (h.currentValue ?? 0) > 0)
-      .map(h => ({
-        stock: h.stock,
-        name: h.name || h.stock,
-        value: h.currentValue ?? 0,
-        market: h.market,
-      }))
+      .map(h => ({ stock: h.stock, name: h.name || h.stock, value: h.currentValue ?? 0, market: h.market }))
       .sort((a, b) => b.value - a.value),
   }
 }
 
-// ─── 數字格式化 ───────────────────────────────────────
-export function formatCurrency(
-  value: number,
-  currency: 'TWD' | 'USD' = 'TWD',
-  compact = false
-): string {
+export function formatCurrency(value: number, currency: 'TWD' | 'USD' = 'TWD', compact = false): string {
   if (isNaN(value)) return '—'
-  if (compact && Math.abs(value) >= 1_000_000) {
+  if (compact && Math.abs(value) >= 1_000_000)
     return `${currency === 'TWD' ? 'NT$' : '$'}${(value / 1_000_000).toFixed(2)}M`
-  }
-  if (compact && Math.abs(value) >= 1_000) {
+  if (compact && Math.abs(value) >= 1_000)
     return `${currency === 'TWD' ? 'NT$' : '$'}${(value / 1_000).toFixed(1)}K`
-  }
-  return new Intl.NumberFormat('zh-TW', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+  return new Intl.NumberFormat('zh-TW', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
 }
 
 export function formatPct(value: number): string {
   if (isNaN(value)) return '—'
-  const sign = value >= 0 ? '+' : ''
-  return `${sign}${value.toFixed(2)}%`
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
 }
 
 export function formatChange(value: number): string {
   if (isNaN(value)) return '—'
-  const sign = value >= 0 ? '+' : ''
-  return `${sign}${formatCurrency(value)}`
+  return `${value >= 0 ? '+' : ''}${formatCurrency(value)}`
 }
