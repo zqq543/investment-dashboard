@@ -35,7 +35,7 @@ function fmtDate(s: string, range: RangeKey): string {
   return `${p[0].slice(2)}/${p[1]}`
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function ChartTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload as DailySnapshot
