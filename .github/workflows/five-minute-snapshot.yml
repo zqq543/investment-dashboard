@@ -1,0 +1,23 @@
+name: Five-Minute Intraday Snapshot
+
+# 預設關閉排程。確認 hourly 穩定後，把下面兩行的 '#' 移除即可啟用。
+on:
+  # schedule:
+  #   - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call snapshot API
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://investment-dashboard-git-main-zqq543-8675s-projects.vercel.app/api/cron/snapshot?mode=intraday")
+          HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          echo "Status: $HTTP_CODE"
+          echo "Body: $HTTP_BODY"
+          if [ "$HTTP_CODE" != "200" ]; then exit 1; fi
