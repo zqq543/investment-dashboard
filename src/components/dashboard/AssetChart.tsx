@@ -35,10 +35,15 @@ function fmtDate(s: string, range: RangeKey): string {
   return `${p[0].slice(2)}/${p[1]}`
 }
 
+interface TooltipProps {
+  active?: boolean
+  payload?: { payload: DailySnapshot }[]
+}
 
-function ChartTooltip({ active, payload }: any) {
+function ChartTooltip({ active, payload }: TooltipProps) {
   if (!active || !payload?.length) return null
-  const d = payload[0]?.payload as DailySnapshot
+  const d = payload[0]?.payload
+  if (!d) return null
   return (
     <div className="card px-3 py-2.5 shadow-lg text-sm min-w-[160px]">
       <p className="text-muted-foreground mb-1.5 text-xs">{d.date}</p>
