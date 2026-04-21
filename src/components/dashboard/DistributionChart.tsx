@@ -17,29 +17,24 @@ interface DistributionChartProps {
   distribution: AssetDistribution
 }
 
-interface DistributionTooltipItem {
+interface PieItem {
   name: string
   value: number
-  payload: {
-    pct?: number
-  }
+  pct: number
 }
 
-interface CustomTooltipProps {
+interface TooltipProps {
   active?: boolean
-  payload?: DistributionTooltipItem[]
+  payload?: { name: string; value: number; payload: PieItem }[]
 }
 
 function formatValue(v: number) {
   return `NT$${v.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
 }
 
-function CustomTooltip({ active, payload }: CustomTooltipProps) {
+function CustomTooltip({ active, payload }: TooltipProps) {
   if (!active || !payload?.length) return null
-
   const item = payload[0]
-  if (!item) return null
-
   return (
     <div className="card px-3 py-2 shadow-lg text-sm">
       <p className="font-medium">{item.name}</p>
@@ -52,7 +47,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
 export function DistributionChart({ distribution }: DistributionChartProps) {
   const total = distribution.cash + distribution.stocks.reduce((s, x) => s + x.value, 0)
 
-  const data = [
+  const data: PieItem[] = [
     { name: '現金', value: distribution.cash, pct: total > 0 ? (distribution.cash / total) * 100 : 0 },
     ...distribution.stocks.map(s => ({
       name: s.name || s.stock,
@@ -74,10 +69,8 @@ export function DistributionChart({ distribution }: DistributionChartProps) {
       <PieChart>
         <Pie
           data={data}
-          cx="50%"
-          cy="50%"
-          innerRadius={55}
-          outerRadius={85}
+          cx="50%" cy="50%"
+          innerRadius={55} outerRadius={85}
           paddingAngle={2}
           dataKey="value"
           strokeWidth={0}
