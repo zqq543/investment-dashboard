@@ -28,7 +28,6 @@ export function enrichHoldings(
     const costTWD = toTWD(h.avgCost * h.shares, h.currency, usdTwdRate)
     const unrealizedPnl = currentValue - costTWD
     const unrealizedPnlPct = costTWD > 0 ? (unrealizedPnl / costTWD) * 100 : 0
-
     return {
       ...h,
       currentPrice,
@@ -47,16 +46,13 @@ export function calcCash(cashflows: Cashflow[]): number {
   }, 0)
 }
 
-// ─── 計算已實現損益 ───────────────────────────────────
+// ─── 計算已實現損益（FIFO）───────────────────────────
 export function calcRealizedPnl(
   transactions: Transaction[],
   usdTwdRate = getDefaultUsdTwdRate()
 ): number {
-  // 用 FIFO 方法計算已實現損益
   const buyQueue: Map<string, { price: number; shares: number; currency: string }[]> = new Map()
   let totalPnl = 0
-
-  // 按日期升序處理
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date))
 
   for (const tx of sorted) {
@@ -65,62 +61,61 @@ export function calcRealizedPnl(
 
     if (tx.type === '買入') {
       if (!buyQueue.has(key)) buyQueue.set(key, [])
-      buyQueue.get(key)!.push({
-        price: tx.price,
-        shares: tx.shares,
-        currency,
-      })
+      buyQueue.get(key)!.push({ price: tx.price, shares: tx.shares, currency })
     } else {
-      // 賣出：從佇列頭部消耗
       const queue = buyQueue.get(key) ?? []
       let remaining = tx.shares
       const sellPriceTWD = toTWD(tx.price, currency as 'USD' | 'TWD', usdTwdRate)
-
       while (remaining > 0 && queue.length > 0) {
         const oldest = queue[0]
         const consumed = Math.min(remaining, oldest.shares)
         const costTWD = toTWD(oldest.price, oldest.currency as 'USD' | 'TWD', usdTwdRate)
-        totalPnl += (sellPriceTWD - costTWD) * consumed - toTWD(tx.fee, currency as 'USD' | 'TWD', usdTwdRate) * (consumed / tx.shares)
+        totalPnl += (sellPriceTWD - costTWD) * consumed
+          - toTWD(tx.fee, currency as 'USD' | 'TWD', usdTwdRate) * (consumed / tx.shares)
         oldest.shares -= consumed
         remaining -= consumed
         if (oldest.shares <= 0) queue.shift()
       }
     }
   }
-
   return totalPnl
 }
 
 // ─── 建立投資組合摘要 ─────────────────────────────────
 export function buildPortfolioSummary(
-  holdings: Holding[],  // 已 enriched（含 currentValue）
+  holdings: Holding[],
   cash: number,
-  snapshots: DailySnapshot[],
+  snapshots: DailySnapshot[], // 降序排列（最新在前）
   realizedPnl: number
 ): PortfolioSummary {
   const stockValue = holdings.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
   const totalAsset = cash + stockValue
   const unrealizedPnl = holdings.reduce((sum, h) => sum + (h.unrealizedPnl ?? 0), 0)
 
-  // 從快照計算變動
   const today = new Date().toISOString().split('T')[0]
-  const todaySnap = snapshots.find(s => s.date === today)
-  const todayChange = todaySnap ? totalAsset - (todaySnap.totalAsset - todaySnap.dailyPnl) : 0
-  const todayChangePct = todayChange !== 0 && totalAsset > 0 ? (todayChange / (totalAsset - todayChange)) * 100 : 0
 
-  // 本週變動
+  // ─ 今日變動：用「最近一筆昨天或更早的快照」作基準
+  const prevSnap = snapshots.find(s => s.date < today)
+  const todayChange = prevSnap ? totalAsset - prevSnap.totalAsset : 0
+  const todayChangePct = prevSnap && prevSnap.totalAsset > 0
+    ? (todayChange / prevSnap.totalAsset) * 100 : 0
+
+  // ─ 本週變動：7 天前或更早的快照
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weekAgoStr = weekAgo.toISOString().split('T')[0]
-  const weekSnap = snapshots.find(s => s.date <= weekAgoStr) ?? snapshots[snapshots.length - 1]
+  const weekSnap = snapshots.find(s => s.date <= weekAgoStr)
   const weekChange = weekSnap ? totalAsset - weekSnap.totalAsset : 0
-  const weekChangePct = weekSnap && weekSnap.totalAsset > 0 ? (weekChange / weekSnap.totalAsset) * 100 : 0
+  const weekChangePct = weekSnap && weekSnap.totalAsset > 0
+    ? (weekChange / weekSnap.totalAsset) * 100 : 0
 
-  // 本月變動
-  const monthStart = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`
-  const monthSnap = snapshots.find(s => s.date < monthStart) ?? snapshots[snapshots.length - 1]
+  // ─ 本月變動：找本月第一天之前的快照
+  const now = new Date()
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const monthSnap = snapshots.find(s => s.date < monthStart)
   const monthChange = monthSnap ? totalAsset - monthSnap.totalAsset : 0
-  const monthChangePct = monthSnap && monthSnap.totalAsset > 0 ? (monthChange / monthSnap.totalAsset) * 100 : 0
+  const monthChangePct = monthSnap && monthSnap.totalAsset > 0
+    ? (monthChange / monthSnap.totalAsset) * 100 : 0
 
   return {
     totalAsset,
@@ -164,14 +159,12 @@ export function formatCurrency(
   compact = false
 ): string {
   if (isNaN(value)) return '—'
-
   if (compact && Math.abs(value) >= 1_000_000) {
     return `${currency === 'TWD' ? 'NT$' : '$'}${(value / 1_000_000).toFixed(2)}M`
   }
   if (compact && Math.abs(value) >= 1_000) {
     return `${currency === 'TWD' ? 'NT$' : '$'}${(value / 1_000).toFixed(1)}K`
   }
-
   return new Intl.NumberFormat('zh-TW', {
     style: 'currency',
     currency,
