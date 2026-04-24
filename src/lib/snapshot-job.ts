@@ -7,20 +7,20 @@ import { enrichHoldings, calcCash, calcRealizedPnl, buildPortfolioSummary } from
 
 export function getPreviousTWDate(): string {
   const now = new Date()
-  const twNow = new Date(now.getTime() + 8 * 60 * 60 * 1000)
-  twNow.setUTCDate(twNow.getUTCDate() - 1)
-  return twNow.toISOString().slice(0, 10)
+  const tw = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  tw.setUTCDate(tw.getUTCDate() - 1)
+  return tw.toISOString().slice(0, 10)
 }
 
 export function getCurrentTWDateTime(): { date: string; datetime: string } {
   const now = new Date()
-  const twNow = new Date(now.getTime() + 8 * 60 * 60 * 1000)
-  const date = twNow.toISOString().slice(0, 10)
-  const hhmm = twNow.toISOString().slice(11, 16)
+  const tw = new Date(now.getTime() + 8 * 60 * 60 * 1000)
+  const date = tw.toISOString().slice(0, 10)
+  const hhmm = tw.toISOString().slice(11, 16)
   return { date, datetime: `${date} ${hhmm}` }
 }
 
-async function calcCurrentPortfolio() {
+async function calcPortfolio() {
   const [holdings, cashflows, transactions, snapshots] = await Promise.all([
     getHoldings(), getCashflows(), getTransactions(), getDailySnapshots(30),
   ])
@@ -29,18 +29,28 @@ async function calcCurrentPortfolio() {
   const priceInputs = holdings.map(h => ({ symbol: h.stock, market: h.market, fallbackPrice: h.avgCost }))
   const prices = await getPrices(priceInputs)
   const enriched = enrichHoldings(holdings, prices)
-  const stockValue = enriched.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
+
+  // 分別計算台股/美股市值
+  const twStockValue = enriched
+    .filter(h => h.market === '台股')
+    .reduce((s, h) => s + (h.currentValue ?? 0), 0)
+  const usStockValue = enriched
+    .filter(h => h.market === '美股')
+    .reduce((s, h) => s + (h.currentValue ?? 0), 0)
+  const stockValue = twStockValue + usStockValue
   const summary = buildPortfolioSummary(enriched, cash, snapshots, realizedPnl)
-  return { cash, stockValue, summary }
+
+  return { cash, stockValue, twStockValue, usStockValue, summary }
 }
 
 export async function runSnapshotJob(): Promise<{
   date: string; totalAsset: number; action: 'created' | 'updated'
 }> {
   const date = getPreviousTWDate()
-  const { cash, stockValue, summary } = await calcCurrentPortfolio()
+  const { cash, stockValue, twStockValue, usStockValue, summary } = await calcPortfolio()
+
   const action = await upsertSnapshot({
-    date, cash, stockValue,
+    date, cash, stockValue, twStockValue, usStockValue,
     totalAsset: summary.totalAsset,
     dailyPnl: summary.todayChange,
     note: `自動快照 ${date}`,
@@ -52,9 +62,10 @@ export async function runIntradaySnapshotJob(): Promise<{
   datetime: string; date: string; totalAsset: number; action: 'created'
 }> {
   const { date, datetime } = getCurrentTWDateTime()
-  const { cash, stockValue, summary } = await calcCurrentPortfolio()
+  const { cash, stockValue, twStockValue, usStockValue, summary } = await calcPortfolio()
+
   await upsertIntradaySnapshot({
-    datetime, date, cash, stockValue,
+    datetime, date, cash, stockValue, twStockValue, usStockValue,
     totalAsset: summary.totalAsset,
     dailyPnl: summary.todayChange,
     note: `盤中快照 ${datetime}`,
