@@ -3,129 +3,98 @@ import type { PriceCache } from '@/types'
 import { CACHE_TTL_MS } from './types'
 import { YahooFinanceProvider } from './yahoo'
 
-// ─── 全域快取（Next.js 伺服器端模組級別單例）─────────
-// 在同一個 serverless function 的 warm instance 中有效
-// 這足以實現 15 分鐘快取，不需要 Redis 等外部依賴
+// 持股快取：5 分鐘
+const HOLDING_TTL = 5 * 60 * 1000
+// 指數快取：3 分鐘（更新更頻繁）
+const INDEX_TTL = 3 * 60 * 1000
+
 const priceCache: PriceCache = {}
+const indexCache: PriceCache = {}
 const provider = new YahooFinanceProvider()
 
-// ─── 讀取快取（若過期則回傳 null）────────────────────
-function getCached(symbol: string): PriceData | null {
-  const entry = priceCache[symbol]
+function getCached(cache: PriceCache, symbol: string, ttl: number): PriceData | null {
+  const entry = cache[symbol]
   if (!entry) return null
-  if (Date.now() - entry.cachedAt > CACHE_TTL_MS) {
-    delete priceCache[symbol]
-    return null
-  }
+  if (Date.now() - entry.cachedAt > ttl) { delete cache[symbol]; return null }
   return entry.data
 }
 
-// ─── 寫入快取 ─────────────────────────────────────────
-function setCache(data: PriceData): void {
-  priceCache[data.symbol] = {
-    data,
-    cachedAt: Date.now(),
-  }
+function setCache(cache: PriceCache, data: PriceData): void {
+  cache[data.symbol] = { data, cachedAt: Date.now() }
 }
 
-// ─── 主要取價函數 ─────────────────────────────────────
-// 流程：快取 → Yahoo Finance → fallback（由呼叫方提供）
-export async function getPrice(
-  symbol: string,
-  market: Market,
-  fallbackPrice?: number
-): Promise<PriceData> {
-  // 1. 先查快取
-  const cached = getCached(symbol)
+// ─── 持股價格 ─────────────────────────────────────────
+export async function getPrice(symbol: string, market: Market, fallbackPrice?: number): Promise<PriceData> {
+  const cached = getCached(priceCache, symbol, HOLDING_TTL)
   if (cached) return cached
-
-  // 2. 向 Yahoo Finance 取價
   try {
     const live = await provider.fetchPrice(symbol, market)
-    if (live) {
-      setCache(live)
-      return live
-    }
-  } catch {
-    // 靜默失敗，繼續 fallback
-  }
-
-  // 3. Fallback：使用傳入的歷史價格
+    if (live) { setCache(priceCache, live); return live }
+  } catch { /* fallthrough */ }
   const fallback: PriceData = {
-    symbol,
-    price: fallbackPrice ?? 0,
+    symbol, price: fallbackPrice ?? 0,
     currency: market === '台股' ? 'TWD' : 'USD',
-    source: 'fallback',
-    timestamp: new Date().toISOString(),
+    source: 'fallback', timestamp: new Date().toISOString(),
   }
-  // fallback 資料快取時間縮短為 5 分鐘
-  priceCache[symbol] = { data: fallback, cachedAt: Date.now() - CACHE_TTL_MS + 5 * 60 * 1000 }
+  priceCache[symbol] = { data: fallback, cachedAt: Date.now() - HOLDING_TTL + 5 * 60 * 1000 }
   return fallback
 }
 
-// ─── 批次取價 ─────────────────────────────────────────
 export async function getPrices(
   symbols: { symbol: string; market: Market; fallbackPrice?: number }[]
 ): Promise<Map<string, PriceData>> {
   const result = new Map<string, PriceData>()
-
-  // 分離：已有快取 vs 需要請求的
   const toFetch: typeof symbols = []
+
   for (const item of symbols) {
-    const cached = getCached(item.symbol)
-    if (cached) {
-      result.set(item.symbol, cached)
-    } else {
-      toFetch.push(item)
-    }
+    const cached = getCached(priceCache, item.symbol, HOLDING_TTL)
+    if (cached) result.set(item.symbol, cached)
+    else toFetch.push(item)
   }
 
-  // 批次請求未快取的
   if (toFetch.length > 0) {
-    const fetched = await provider.fetchPrices(
-      toFetch.map(({ symbol, market }) => ({ symbol, market }))
-    )
-
-    // 建立 fetched 的 map
+    const fetched = await provider.fetchPrices(toFetch.map(({ symbol, market }) => ({ symbol, market })))
     const fetchedMap = new Map(fetched.map(p => [p.symbol, p]))
-
     for (const item of toFetch) {
       const price = fetchedMap.get(item.symbol)
-      if (price) {
-        setCache(price)
-        result.set(item.symbol, price)
-      } else {
-        // fallback
+      if (price) { setCache(priceCache, price); result.set(item.symbol, price) }
+      else {
         const fallback: PriceData = {
-          symbol: item.symbol,
-          price: item.fallbackPrice ?? 0,
+          symbol: item.symbol, price: item.fallbackPrice ?? 0,
           currency: item.market === '台股' ? 'TWD' : 'USD',
-          source: 'fallback',
-          timestamp: new Date().toISOString(),
+          source: 'fallback', timestamp: new Date().toISOString(),
         }
         result.set(item.symbol, fallback)
       }
     }
   }
-
   return result
 }
 
-// ─── 清除特定 symbol 快取（手動刷新用）───────────────
+// ─── 指數價格（獨立快取，3 分鐘）────────────────────
+export async function getIndexPrice(symbol: string, market: Market): Promise<PriceData | null> {
+  const cached = getCached(indexCache, symbol, INDEX_TTL)
+  if (cached) return cached
+  try {
+    const live = await provider.fetchPrice(symbol, market)
+    if (live) { setCache(indexCache, live); return live }
+  } catch { /* fallthrough */ }
+  return null
+}
+
 export function clearCache(symbol?: string): void {
-  if (symbol) {
-    delete priceCache[symbol]
-  } else {
-    // 清除全部
+  if (symbol) { delete priceCache[symbol]; delete indexCache[symbol] }
+  else {
     Object.keys(priceCache).forEach(k => delete priceCache[k])
+    Object.keys(indexCache).forEach(k => delete indexCache[k])
   }
 }
 
-// ─── 快取狀態查詢 ─────────────────────────────────────
-export function getCacheStatus(): { symbol: string; age: number; source: string }[] {
+export function getCacheStatus() {
   return Object.entries(priceCache).map(([symbol, entry]) => ({
-    symbol,
-    age: Math.round((Date.now() - entry.cachedAt) / 1000),
-    source: entry.data.source,
+    symbol, age: Math.round((Date.now() - entry.cachedAt) / 1000), source: entry.data.source,
   }))
 }
+
+// 給外部使用的 TTL 常數（用於前端自動刷新計時）
+export const CACHE_TTL_SECONDS = HOLDING_TTL / 1000
