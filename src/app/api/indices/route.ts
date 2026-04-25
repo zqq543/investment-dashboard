@@ -1,41 +1,42 @@
 import { NextResponse } from 'next/server'
-import type { IndexQuote } from '@/types'
+import type { IndexQuote, Market } from '@/types'
 
 export const runtime = 'nodejs'
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
+// ─── 統一型別 ─────────────────────────────────────────
+interface IndexDef {
+  symbol: string
+  name: string
+  market: Market
+  currency: 'TWD' | 'USD'
+}
+
 // ─── 指數定義 ─────────────────────────────────────────
-// 台股
-const TW_INDICES = [
-  { symbol: '^TWII',    name: '加權指數',             market: '台股' as const, currency: 'TWD' as const },
-  { symbol: '^TWRIX',   name: '加權報酬指數',          market: '台股' as const, currency: 'TWD' as const },
-  { symbol: '00631L.TW',name: '台灣50正二',            market: '台股' as const, currency: 'TWD' as const },
+const TW_INDICES: IndexDef[] = [
+  { symbol: '^TWII',     name: '加權指數',       market: '台股', currency: 'TWD' },
+  { symbol: '^TWRIX',    name: '加權報酬指數',    market: '台股', currency: 'TWD' },
+  { symbol: '00631L.TW', name: '台灣50正二',      market: '台股', currency: 'TWD' },
 ]
 
-// 美股
-const US_INDICES = [
-  { symbol: '^GSPC',    name: 'S&P 500',              market: '美股' as const, currency: 'USD' as const },
-  { symbol: '^NDX',     name: '那斯達克100',            market: '美股' as const, currency: 'USD' as const },
-  { symbol: '^DJI',     name: '道瓊工業',              market: '美股' as const, currency: 'USD' as const },
-  { symbol: '^RUT',     name: '羅素2000',              market: '美股' as const, currency: 'USD' as const },
+const US_INDICES: IndexDef[] = [
+  { symbol: '^GSPC', name: 'S&P 500',    market: '美股', currency: 'USD' },
+  { symbol: '^NDX',  name: '那斯達克100', market: '美股', currency: 'USD' },
+  { symbol: '^DJI',  name: '道瓊工業',   market: '美股', currency: 'USD' },
+  { symbol: '^RUT',  name: '羅素2000',   market: '美股', currency: 'USD' },
 ]
 
-// 全球
-const GLOBAL_INDICES = [
-  { symbol: 'VT',       name: '全球股市 VT',           market: '美股' as const, currency: 'USD' as const },
-  { symbol: 'EEM',      name: '新興市場 EEM',          market: '美股' as const, currency: 'USD' as const },
+const GLOBAL_INDICES: IndexDef[] = [
+  { symbol: 'VT',  name: '全球 VT',   market: '美股', currency: 'USD' },
+  { symbol: 'EEM', name: '新興市場',  market: '美股', currency: 'USD' },
 ]
 
-// 正二對應的參考指數說明 mapping（顯示用）
-// 00631L 追蹤 MSCI台灣指數 x2，^TWII 是最接近的觀察基準
-// ^NDX x2 → 那斯達克100正二（QLD/TQQQ 等參考）
-
+// ─── Yahoo Finance 抓價 ───────────────────────────────
 async function fetchYahooIndex(symbol: string): Promise<{
   price: number; change: number; changePct: number
 } | null> {
-  const encoded = encodeURIComponent(symbol)
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1d&range=2d`
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 8000)
@@ -43,7 +44,6 @@ async function fetchYahooIndex(symbol: string): Promise<{
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
       },
       signal: controller.signal,
       cache: 'no-store',
@@ -69,13 +69,13 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const filter = url.searchParams.get('market') ?? 'ALL'
 
-  let targets: typeof TW_INDICES = []
+  // 統一型別，不再有型別衝突
+  let targets: IndexDef[]
   if (filter === '台股') {
     targets = TW_INDICES
   } else if (filter === '美股') {
     targets = [...US_INDICES, ...GLOBAL_INDICES]
   } else {
-    // ALL：台股 + 主要美股（不顯示全部，避免 header 過擁擠）
     targets = [...TW_INDICES, ...US_INDICES]
   }
 
