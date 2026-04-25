@@ -2,21 +2,49 @@ name: Hourly Intraday Snapshot
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 * * * *'  # 每小時觸發（UTC）
   workflow_dispatch:
+    inputs:
+      reason:
+        description: '手動觸發原因'
+        required: false
+        default: 'manual trigger'
 
 jobs:
-  trigger:
+  trigger-intraday-snapshot:
+    name: Trigger Hourly Intraday Snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
     steps:
-      - name: Call snapshot API
+      - name: Call /api/cron/snapshot?mode=intraday
         run: |
           RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://investment-dashboard-git-main-zqq543-8675s-projects.vercel.app/api/cron/snapshot?mode=intraday")
+
           HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
-          echo "Status: $HTTP_CODE"
-          echo "Body: $HTTP_BODY"
-          if [ "$HTTP_CODE" != "200" ]; then exit 1; fi
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response Body: $HTTP_BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Intraday snapshot failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          OK=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('ok',False)).lower())" 2>/dev/null || echo "false")
+          if [ "$OK" != "true" ]; then
+            echo "❌ Snapshot returned ok=false"
+            echo "$HTTP_BODY"
+            exit 1
+          fi
+
+          echo "✅ Intraday snapshot completed"
+          echo "$HTTP_BODY" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print(f\"Datetime: {d.get('datetime','?')} | Total Asset: {d.get('totalAsset','?')}\")
+" 2>/dev/null || true

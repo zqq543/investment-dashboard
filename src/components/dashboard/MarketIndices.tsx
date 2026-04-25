@@ -8,24 +8,43 @@ interface MarketIndicesProps {
   market: MarketFilter
 }
 
-function IndexItem({ idx, compact }: { idx: IndexQuote; compact?: boolean }) {
-  const isPos = idx.change >= 0
+function ArrowIcon({ isUp }: { isUp: boolean }) {
   return (
-    <div className={cn(
-      'flex items-center gap-2',
-      compact ? 'flex-col items-start gap-0' : 'gap-2'
-    )}>
-      <span className="text-xs text-muted-foreground whitespace-nowrap">{idx.name}</span>
-      <div className="flex items-center gap-1.5">
-        <span className="text-sm font-semibold tabular-nums">
-          {idx.currency === 'TWD'
-            ? idx.price.toLocaleString('zh-TW', { maximumFractionDigits: 0 })
-            : `$${idx.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-          }
+    <span className={isUp ? 'arrow-up' : 'arrow-down'}>
+      {isUp ? '▲' : '▼'}
+    </span>
+  )
+}
+
+function IndexItem({ idx }: { idx: IndexQuote }) {
+  const isPos = idx.changePct >= 0
+  const isZero = idx.change === 0
+
+  const priceStr = idx.currency === 'TWD'
+    ? idx.price.toLocaleString('zh-TW', { maximumFractionDigits: 0 })
+    : idx.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  const changeStr = idx.currency === 'TWD'
+    ? Math.abs(idx.change).toLocaleString('zh-TW', { maximumFractionDigits: 0 })
+    : Math.abs(idx.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[10px] text-muted-foreground whitespace-nowrap leading-none">
+        {idx.name}
+      </span>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-sm font-semibold tabular-nums leading-none">
+          {priceStr}
         </span>
-        {idx.changePct !== 0 && (
-          <span className={cn('text-xs tabular-nums', isPos ? 'text-positive' : 'text-negative')}>
-            {isPos ? '+' : ''}{idx.changePct.toFixed(2)}%
+        {!isZero && (
+          <span className={cn(
+            'text-[11px] tabular-nums font-medium flex items-center gap-0.5 leading-none',
+            isPos ? 'text-positive' : 'text-negative'
+          )}>
+            <ArrowIcon isUp={isPos} />
+            {changeStr}
+            <span className="opacity-80">({isPos ? '+' : ''}{idx.changePct.toFixed(2)}%)</span>
           </span>
         )}
       </div>
@@ -43,14 +62,13 @@ export function MarketIndices({ market }: MarketIndicesProps) {
       if (!res.ok) return
       const json = await res.json()
       setIndices(json.data ?? [])
-    } catch { /* 靜默失敗，指數抓不到不影響主功能 */ }
+    } catch { /* 靜默失敗 */ }
     finally { setLoading(false) }
   }, [market])
 
   useEffect(() => {
     setLoading(true)
     fetchIndices()
-    // 每 3 分鐘自動刷新
     const timer = setInterval(fetchIndices, 3 * 60 * 1000)
     return () => clearInterval(timer)
   }, [fetchIndices])
@@ -59,9 +77,9 @@ export function MarketIndices({ market }: MarketIndicesProps) {
     return (
       <div className="flex items-center gap-4">
         {[1, 2].map(i => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="h-3 w-16 skeleton rounded" />
-            <div className="h-4 w-20 skeleton rounded" />
+          <div key={i} className="space-y-1">
+            <div className="h-2.5 w-16 skeleton rounded" />
+            <div className="h-4 w-24 skeleton rounded" />
           </div>
         ))}
       </div>
@@ -71,7 +89,7 @@ export function MarketIndices({ market }: MarketIndicesProps) {
   if (indices.length === 0) return null
 
   return (
-    <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
       {indices.map(idx => (
         <IndexItem key={idx.symbol} idx={idx} />
       ))}

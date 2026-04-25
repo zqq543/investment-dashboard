@@ -6,78 +6,73 @@ interface StatCardProps {
   label: string
   value: string
   subValue?: string
-  change?: number   // 數值，正為綠，負為紅
+  change?: number
   changePct?: number
-  highlight?: boolean  // 主要卡片（總資產）特殊樣式
-  icon?: React.ReactNode
+  highlight?: boolean
   loading?: boolean
 }
 
 export function StatCard({
-  label,
-  value,
-  subValue,
-  change,
-  changePct,
-  highlight = false,
-  icon,
-  loading = false,
+  label, value, subValue, change, changePct,
+  highlight = false, loading = false,
 }: StatCardProps) {
-  const isPositive = (change ?? 0) >= 0
+  const isPos = (change ?? 0) >= 0
+  const isZero = change === 0 || change === undefined
   const hasChange = change !== undefined
 
   if (loading) {
     return (
-      <div className={cn('card p-5 space-y-3', highlight && 'ring-1 ring-accent/30')}>
-        <div className="h-4 w-20 skeleton rounded" />
-        <div className="h-8 w-32 skeleton rounded" />
+      <div className={cn('card p-4 sm:p-5 space-y-3', highlight && 'ring-1 ring-accent/30')}>
+        <div className="h-3.5 w-20 skeleton rounded" />
+        <div className="h-7 w-32 skeleton rounded" />
         <div className="h-3 w-24 skeleton rounded" />
       </div>
     )
   }
 
   return (
-    <div
-      className={cn(
-        'card p-5 flex flex-col gap-2 transition-shadow hover:shadow-md',
-        highlight && 'ring-1 ring-accent/20 bg-gradient-to-br from-card to-accent/5'
-      )}
-    >
-      {/* 標籤列 */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
-          {label}
-        </span>
-        {icon && (
-          <span className="text-muted-foreground/60">{icon}</span>
-        )}
-      </div>
+    <div className={cn(
+      'card p-4 sm:p-5 flex flex-col gap-1.5 min-w-0 transition-shadow hover:shadow-md',
+      highlight && 'ring-1 ring-accent/20 bg-gradient-to-br from-card to-accent/5'
+    )}>
+      <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase truncate">
+        {label}
+      </span>
 
-      {/* 主要數值 */}
-      <div className={cn('tabular-nums', highlight ? 'text-3xl font-bold' : 'text-2xl font-semibold')}>
+      {/* 主數值 */}
+      <div className={cn(
+        'tabular-nums font-semibold leading-tight break-all',
+        highlight ? 'text-2xl sm:text-3xl font-bold' : 'text-xl sm:text-2xl',
+        hasChange && !isZero
+          ? (isPos ? 'text-positive' : 'text-negative')
+          : ''
+      )}>
         {value}
       </div>
 
-      {/* 副文字 / 漲跌幅 */}
-      <div className="flex items-center gap-2 min-h-[1.2rem]">
-        {hasChange && (
-          <span
-            className={cn(
-              'text-sm font-medium tabular-nums',
-              isPositive ? 'text-positive' : 'text-negative'
-            )}
-          >
-            {isPositive ? '▲' : '▼'}{' '}
+      {/* 漲跌幅 + 副文字 */}
+      <div className="flex items-center gap-1.5 flex-wrap min-h-[1.1rem]">
+        {hasChange && !isZero && (
+          <span className={cn(
+            'text-xs sm:text-sm font-medium tabular-nums flex items-center gap-0.5',
+            isPos ? 'text-positive' : 'text-negative'
+          )}>
+            <span className={isPos ? 'arrow-up' : 'arrow-down'}>
+              {isPos ? '▲' : '▼'}
+            </span>
             {Math.abs(change!).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
             {changePct !== undefined && (
-              <span className="ml-1 text-xs opacity-80">
-                ({isPositive ? '+' : ''}{changePct.toFixed(2)}%)
+              <span className="opacity-75 ml-0.5">
+                ({isPos ? '+' : ''}{changePct.toFixed(2)}%)
               </span>
             )}
           </span>
         )}
+        {isZero && hasChange && (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
         {subValue && (
-          <span className="text-xs text-muted-foreground">{subValue}</span>
+          <span className="text-xs text-muted-foreground truncate">{subValue}</span>
         )}
       </div>
     </div>

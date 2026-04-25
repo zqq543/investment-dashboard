@@ -1,23 +1,47 @@
 name: Five-Minute Intraday Snapshot
 
-# 預設關閉排程。確認 hourly 穩定後，把下面兩行的 '#' 移除即可啟用。
+# ⚠️ 建議：先啟用並確認 hourly-snapshot.yml 穩定後再開啟此 workflow
+# 啟用方式：將下方 schedule 的 '#' 移除
+
 on:
   # schedule:
-  #   - cron: '*/5 * * * *'
+  #   - cron: '*/5 * * * *'  # 每 5 分鐘（取消 '#' 以啟用）
   workflow_dispatch:
+    inputs:
+      reason:
+        description: '手動觸發原因'
+        required: false
+        default: 'manual trigger'
 
 jobs:
-  trigger:
+  trigger-intraday-snapshot:
+    name: Trigger 5-Minute Intraday Snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 3
+
     steps:
-      - name: Call snapshot API
+      - name: Call /api/cron/snapshot?mode=intraday
         run: |
           RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://investment-dashboard-git-main-zqq543-8675s-projects.vercel.app/api/cron/snapshot?mode=intraday")
+
           HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
-          echo "Status: $HTTP_CODE"
-          echo "Body: $HTTP_BODY"
-          if [ "$HTTP_CODE" != "200" ]; then exit 1; fi
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response Body: $HTTP_BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Snapshot failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          OK=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('ok',False)).lower())" 2>/dev/null || echo "false")
+          if [ "$OK" != "true" ]; then
+            echo "❌ Snapshot returned ok=false"
+            exit 1
+          fi
+
+          echo "✅ 5-minute snapshot completed"
