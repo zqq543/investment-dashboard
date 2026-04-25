@@ -17,7 +17,7 @@ function ArrowIcon({ isUp }: { isUp: boolean }) {
 }
 
 function IndexItem({ idx }: { idx: IndexQuote }) {
-  const isPos = idx.changePct >= 0
+  const isPos  = idx.changePct >= 0
   const isZero = idx.change === 0
 
   const priceStr = idx.currency === 'TWD'
@@ -29,22 +29,22 @@ function IndexItem({ idx }: { idx: IndexQuote }) {
     : Math.abs(idx.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
+    <div className="flex flex-col gap-0.5 min-w-0 flex-shrink-0">
       <span className="text-[10px] text-muted-foreground whitespace-nowrap leading-none">
         {idx.name}
       </span>
-      <div className="flex items-center gap-1 flex-wrap">
-        <span className="text-sm font-semibold tabular-nums leading-none">
+      <div className="flex items-center gap-1">
+        <span className="text-xs sm:text-sm font-semibold tabular-nums leading-none whitespace-nowrap">
           {priceStr}
         </span>
         {!isZero && (
           <span className={cn(
-            'text-[11px] tabular-nums font-medium flex items-center gap-0.5 leading-none',
+            'text-[10px] sm:text-[11px] tabular-nums font-medium flex items-center gap-0.5 leading-none whitespace-nowrap',
             isPos ? 'text-positive' : 'text-negative'
           )}>
             <ArrowIcon isUp={isPos} />
-            {changeStr}
-            <span className="opacity-80">({isPos ? '+' : ''}{idx.changePct.toFixed(2)}%)</span>
+            <span className="hidden sm:inline">{changeStr}</span>
+            <span>({isPos ? '+' : ''}{idx.changePct.toFixed(2)}%)</span>
           </span>
         )}
       </div>
@@ -52,6 +52,7 @@ function IndexItem({ idx }: { idx: IndexQuote }) {
   )
 }
 
+// 手機版：可左右滑動的指數列
 export function MarketIndices({ market }: MarketIndicesProps) {
   const [indices, setIndices] = useState<IndexQuote[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,7 +63,7 @@ export function MarketIndices({ market }: MarketIndicesProps) {
       if (!res.ok) return
       const json = await res.json()
       setIndices(json.data ?? [])
-    } catch { /* 靜默失敗 */ }
+    } catch { /* 靜默失敗，不影響主功能 */ }
     finally { setLoading(false) }
   }, [market])
 
@@ -75,11 +76,11 @@ export function MarketIndices({ market }: MarketIndicesProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-4">
-        {[1, 2].map(i => (
-          <div key={i} className="space-y-1">
-            <div className="h-2.5 w-16 skeleton rounded" />
-            <div className="h-4 w-24 skeleton rounded" />
+      <div className="flex items-center gap-3">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="space-y-1 flex-shrink-0">
+            <div className="h-2.5 w-14 skeleton rounded" />
+            <div className="h-3.5 w-20 skeleton rounded" />
           </div>
         ))}
       </div>
@@ -89,7 +90,10 @@ export function MarketIndices({ market }: MarketIndicesProps) {
   if (indices.length === 0) return null
 
   return (
-    <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
+    <div
+      className="flex items-center gap-3 sm:gap-4 overflow-x-auto pb-0.5"
+      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+    >
       {indices.map(idx => (
         <IndexItem key={idx.symbol} idx={idx} />
       ))}

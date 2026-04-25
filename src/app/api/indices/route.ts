@@ -6,28 +6,44 @@ export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
 // ─── 指數定義 ─────────────────────────────────────────
+// 台股
 const TW_INDICES = [
-  { symbol: '^TWII',  yahooSymbol: '^TWII',  name: '加權指數',             market: '台股' as const, currency: 'TWD' as const },
-  { symbol: '^TWRIX', yahooSymbol: '^TWRIX', name: '發行量加權股價報酬指數', market: '台股' as const, currency: 'TWD' as const },
+  { symbol: '^TWII',    name: '加權指數',             market: '台股' as const, currency: 'TWD' as const },
+  { symbol: '^TWRIX',   name: '加權報酬指數',          market: '台股' as const, currency: 'TWD' as const },
+  { symbol: '00631L.TW',name: '台灣50正二',            market: '台股' as const, currency: 'TWD' as const },
 ]
 
+// 美股
 const US_INDICES = [
-  { symbol: '^GSPC', yahooSymbol: '^GSPC', name: 'S&P 500',   market: '美股' as const, currency: 'USD' as const },
-  { symbol: '^IXIC', yahooSymbol: '^IXIC', name: '那斯達克',  market: '美股' as const, currency: 'USD' as const },
+  { symbol: '^GSPC',    name: 'S&P 500',              market: '美股' as const, currency: 'USD' as const },
+  { symbol: '^NDX',     name: '那斯達克100',            market: '美股' as const, currency: 'USD' as const },
+  { symbol: '^DJI',     name: '道瓊工業',              market: '美股' as const, currency: 'USD' as const },
+  { symbol: '^RUT',     name: '羅素2000',              market: '美股' as const, currency: 'USD' as const },
 ]
 
-// ─── 從 Yahoo Finance 抓單一指數 ─────────────────────
-async function fetchYahooIndex(yahooSymbol: string): Promise<{
+// 全球
+const GLOBAL_INDICES = [
+  { symbol: 'VT',       name: '全球股市 VT',           market: '美股' as const, currency: 'USD' as const },
+  { symbol: 'EEM',      name: '新興市場 EEM',          market: '美股' as const, currency: 'USD' as const },
+]
+
+// 正二對應的參考指數說明 mapping（顯示用）
+// 00631L 追蹤 MSCI台灣指數 x2，^TWII 是最接近的觀察基準
+// ^NDX x2 → 那斯達克100正二（QLD/TQQQ 等參考）
+
+async function fetchYahooIndex(symbol: string): Promise<{
   price: number; change: number; changePct: number
 } | null> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=2d`
+  const encoded = encodeURIComponent(symbol)
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1d&range=2d`
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 秒 timeout
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
       },
       signal: controller.signal,
       cache: 'no-store',
@@ -53,14 +69,19 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const filter = url.searchParams.get('market') ?? 'ALL'
 
-  let targets = [...TW_INDICES, ...US_INDICES]
-  if (filter === '台股') targets = TW_INDICES
-  if (filter === '美股') targets = US_INDICES
+  let targets: typeof TW_INDICES = []
+  if (filter === '台股') {
+    targets = TW_INDICES
+  } else if (filter === '美股') {
+    targets = [...US_INDICES, ...GLOBAL_INDICES]
+  } else {
+    // ALL：台股 + 主要美股（不顯示全部，避免 header 過擁擠）
+    targets = [...TW_INDICES, ...US_INDICES]
+  }
 
-  // 並發抓取，每個最多等 8 秒
   const results = await Promise.allSettled(
     targets.map(async (idx): Promise<IndexQuote | null> => {
-      const data = await fetchYahooIndex(idx.yahooSymbol)
+      const data = await fetchYahooIndex(idx.symbol)
       if (!data) return null
       return {
         symbol: idx.symbol,
