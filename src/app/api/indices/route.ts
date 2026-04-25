@@ -5,7 +5,6 @@ export const runtime = 'nodejs'
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
-// ─── 統一型別 ─────────────────────────────────────────
 interface IndexDef {
   symbol: string
   name: string
@@ -13,11 +12,10 @@ interface IndexDef {
   currency: 'TWD' | 'USD'
 }
 
-// ─── 指數定義 ─────────────────────────────────────────
 const TW_INDICES: IndexDef[] = [
-  { symbol: '^TWII',     name: '加權指數',       market: '台股', currency: 'TWD' },
-  { symbol: '^TWRIX',    name: '加權報酬指數',    market: '台股', currency: 'TWD' },
-  { symbol: '00631L.TW', name: '台灣50正二',      market: '台股', currency: 'TWD' },
+  { symbol: '^TWII',     name: '加權指數',    market: '台股', currency: 'TWD' },
+  { symbol: '^TWRIX',    name: '加權報酬指數', market: '台股', currency: 'TWD' },
+  { symbol: '00631L.TW', name: '台灣50正二',  market: '台股', currency: 'TWD' },
 ]
 
 const US_INDICES: IndexDef[] = [
@@ -28,38 +26,69 @@ const US_INDICES: IndexDef[] = [
 ]
 
 const GLOBAL_INDICES: IndexDef[] = [
-  { symbol: 'VT',  name: '全球 VT',   market: '美股', currency: 'USD' },
-  { symbol: 'EEM', name: '新興市場',  market: '美股', currency: 'USD' },
+  { symbol: 'VT',  name: '全球 VT',  market: '美股', currency: 'USD' },
+  { symbol: 'EEM', name: '新興市場', market: '美股', currency: 'USD' },
 ]
 
-// ─── Yahoo Finance 抓價 ───────────────────────────────
 async function fetchYahooIndex(symbol: string): Promise<{
-  price: number; change: number; changePct: number
+  price: number; change: number; changePct: number; isStale: boolean
 } | null> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`
+  // range=5d 確保假日也能拿到最近交易日資料
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    const tid = setTimeout(() => controller.abort(), 9000)
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/json',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
+        'Referer': 'https://finance.yahoo.com',
       },
       signal: controller.signal,
       cache: 'no-store',
     })
-    clearTimeout(timeoutId)
+    clearTimeout(tid)
     if (!res.ok) return null
+
     const json = await res.json()
     const result = json?.chart?.result?.[0]
     if (!result) return null
+
     const meta = result.meta
-    const price: number = meta?.regularMarketPrice ?? 0
-    const prevClose: number = meta?.previousClose ?? meta?.chartPreviousClose ?? 0
-    if (!price || !prevClose) return null
-    const change = price - prevClose
+
+    // ── 現價：多重 fallback，假日取最後收盤 ──────────────
+    const price: number =
+      meta?.regularMarketPrice ||
+      meta?.previousClose ||
+      meta?.chartPreviousClose ||
+      // 從歷史 close 取最後一筆
+      (() => {
+        const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
+        const valid = closes.filter((v: number) => v != null && v > 0)
+        return valid[valid.length - 1] ?? 0
+      })()
+
+    if (!price || price <= 0) return null
+
+    // ── 前收：多重 fallback ──────────────────────────────
+    const prevClose: number =
+      meta?.previousClose ||
+      meta?.chartPreviousClose ||
+      // 從歷史取倒數第二筆
+      (() => {
+        const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
+        const valid = closes.filter((v: number) => v != null && v > 0)
+        return valid.length >= 2 ? valid[valid.length - 2] : 0
+      })()
+
+    const change = prevClose > 0 ? price - prevClose : 0
     const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
-    return { price, change, changePct }
+
+    // 判斷是否為假日（市場關閉）：marketState !== 'REGULAR'
+    const isStale = meta?.marketState !== 'REGULAR'
+
+    return { price, change, changePct, isStale }
   } catch {
     return null
   }
@@ -69,7 +98,6 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const filter = url.searchParams.get('market') ?? 'ALL'
 
-  // 統一型別，不再有型別衝突
   let targets: IndexDef[]
   if (filter === '台股') {
     targets = TW_INDICES
@@ -91,6 +119,7 @@ export async function GET(req: Request) {
         changePct: data.changePct,
         market: idx.market,
         currency: idx.currency,
+        isStale: data.isStale,
       }
     })
   )

@@ -96,6 +96,7 @@ export interface PriceCache {
 }
 
 export interface IndexQuote {
+  isStale?: boolean   // true = 休市/假日，顯示最後收盤價
   symbol: string
   name: string
   price: number
