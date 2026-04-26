@@ -3,7 +3,6 @@ export type Currency = 'USD' | 'TWD'
 export type TransactionType = '買入' | '賣出'
 export type CashflowType = '入金' | '出金'
 export type MarketFilter = 'ALL' | '台股' | '美股'
-export type IndexGroup = 'tw' | 'us' | 'global' | 'semi' | 'vix'
 
 export interface Transaction {
   id: string; stock: string; date: string; market: Market
@@ -11,7 +10,8 @@ export interface Transaction {
 }
 
 export interface Cashflow {
-  id: string; name: string; date: string; type: CashflowType; amount: number; note: string
+  id: string; name: string; date: string
+  type: CashflowType; amount: number; note: string
 }
 
 export interface Holding {
@@ -54,9 +54,10 @@ export interface PriceCache {
 
 export interface IndexQuote {
   symbol: string; name: string; price: number
-  change: number; changePct: number; market: Market
-  currency: Currency; isStale?: boolean
-  group?: IndexGroup
+  change: number; changePct: number
+  market: Market; currency: Currency
+  isStale?: boolean
+  row?: number   // 顯示行（0=台股, 1=全球+VIX+半導體, 2=美股）
 }
 
 export interface ApiResponse<T> {

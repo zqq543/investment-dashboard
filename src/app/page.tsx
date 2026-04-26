@@ -119,8 +119,8 @@ export default function DashboardPage() {
         )}
 
         {/* ── 市場 Tab + 指數 ── */}
-        <div className="flex items-center gap-2 sm:gap-4 border-b border-border pb-4 flex-wrap">
-          {/* Tab */}
+        <div className="border-b border-border pb-4 space-y-3">
+          {/* Tab 按鈕列 */}
           <div className="flex items-center gap-1 flex-shrink-0">
             {TABS.map(tab => (
               <button key={tab.key} onClick={() => setMarket(tab.key)}
@@ -141,11 +141,9 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* 指數行情 */}
+          {/* 指數行情：在 Tab 下方 */}
           {!loading && (
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <MarketIndices market={market} />
-            </div>
+            <MarketIndices market={market} />
           )}
         </div>
 
@@ -165,7 +163,7 @@ export default function DashboardPage() {
                   subValue={`未實現 ${(s?.unrealizedPnl ?? 0) >= 0 ? '+' : ''}NT$${fmt(Math.abs(s?.unrealizedPnl ?? 0))}`}
                   highlight
                 />
-                <StatCard label="今日變動" value={fmtSigned(s?.todayChange ?? 0)} change={s?.todayChange} changePct={s?.todayChangePct}/>
+                <StatCard label="今日變動" value={fmtSigned(s?.todayChange ?? 0)} change={s?.todayChange} changePct={s?.todayChangePct} lastUpdated={data?.snapshots?.at(-1)?.date ?? undefined}/>
                 <StatCard label="本週變動" value={fmtSigned(s?.weekChange ?? 0)}  change={s?.weekChange}  changePct={s?.weekChangePct}/>
                 <StatCard label="本月變動" value={fmtSigned(s?.monthChange ?? 0)} change={s?.monthChange} changePct={s?.monthChangePct}/>
               </>
