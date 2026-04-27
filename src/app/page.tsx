@@ -99,35 +99,40 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Tab + 統計資訊（右側對齊）+ 指數 */}
-        <div className="border-b border-border pb-4 space-y-3">
-          <div className="flex items-center justify-between">
-            {/* 左：Tab */}
-            <div className="flex items-center gap-1">
-              {TABS.map(tab => (
-                <button key={tab.key} onClick={() => setMarket(tab.key)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-2.5 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                    market === tab.key ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}>
-                  <span className="sm:hidden">{tab.short}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              ))}
+        {/* Tab 列 + 指數（同一行：Tab 左、指數右） */}
+        <div className="border-b border-border pb-3">
+          <div className="flex items-start gap-3 justify-between">
+            {/* 左：Tab 按鈕 + 統計 */}
+            <div className="flex flex-col gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1">
+                {TABS.map(tab => (
+                  <button key={tab.key} onClick={() => setMarket(tab.key)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                      market === tab.key ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    )}>
+                    <span className="sm:hidden">{tab.short}</span>
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+              {!loading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+                  <span>全部 <strong className="text-foreground">{counts.ALL}</strong></span>
+                  <span className="opacity-40">·</span>
+                  <span>台股 <strong className="text-positive">{counts.台股}</strong></span>
+                  <span className="opacity-40">·</span>
+                  <span>美股 <strong className="text-negative">{counts.美股}</strong></span>
+                </div>
+              )}
             </div>
-            {/* 右：統計數字 */}
+            {/* 右：指數行情 */}
             {!loading && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>全部 <strong className="text-foreground">{counts.ALL}</strong></span>
-                <span className="opacity-40">·</span>
-                <span>台股 <strong className="text-positive">{counts.台股}</strong></span>
-                <span className="opacity-40">·</span>
-                <span>美股 <strong className="text-negative">{counts.美股}</strong></span>
+              <div className="flex-1 min-w-0 flex justify-end">
+                <MarketIndices market={market} />
               </div>
             )}
           </div>
-          {/* 指數行情 */}
-          {!loading && <MarketIndices market={market} />}
         </div>
 
         {/* 資產卡片 */}
