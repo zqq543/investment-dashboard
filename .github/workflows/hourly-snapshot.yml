@@ -36,6 +36,7 @@ jobs:
           fi
 
           OK=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('ok',False)).lower())" 2>/dev/null || echo "false")
+
           if [ "$OK" != "true" ]; then
             echo "❌ Snapshot returned ok=false"
             echo "$HTTP_BODY"
@@ -43,8 +44,4 @@ jobs:
           fi
 
           echo "✅ Intraday snapshot completed"
-          echo "$HTTP_BODY" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-print(f\"Datetime: {d.get('datetime','?')} | Total Asset: {d.get('totalAsset','?')}\")
-" 2>/dev/null || true
+          echo "$HTTP_BODY" | python3 -c 'import sys,json; d=json.load(sys.stdin); print("Datetime: {} | Total Asset: {}".format(d.get("datetime","?"), d.get("totalAsset","?")))' 2>/dev/null || true
