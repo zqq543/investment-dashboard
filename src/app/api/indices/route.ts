@@ -35,7 +35,7 @@ function isWeekend(): boolean {
 }
 
 async function fetchYahoo(symbol: string): Promise<{ price: number; prevClose: number; isStale: boolean } | null> {
-  const range = isWeekend() ? '5d' : '2d'
+  const range = '5d'
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`
   try {
     const ctrl = new AbortController()
@@ -49,33 +49,51 @@ async function fetchYahoo(symbol: string): Promise<{ price: number; prevClose: n
     const chart = (await res.json())?.chart?.result?.[0]
     if (!chart) return null
     const meta   = chart.meta
-    const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as number[]
+    const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as Array<number | null>
     const valid  = closes.filter((v): v is number => v != null && v > 0)
     const price = isWeekend()
       ? valid[valid.length - 1] || 0
       : ((meta?.regularMarketPrice > 0 ? meta.regularMarketPrice : 0) || valid[valid.length - 1] || 0)
     if (price <= 0) return null
-    const prevClose = (meta?.previousClose > 0 ? meta.previousClose : 0) || (valid.length >= 2 ? valid[valid.length - 2] : 0)
+    const lastValidClose = valid[valid.length - 1] || 0
+    const secondLastValidClose = valid[valid.length - 2] || 0
+    const lastCloseMatchesPrice = lastValidClose > 0 && Math.abs(lastValidClose - price) < 0.0001
+    const prevClose =
+      (lastCloseMatchesPrice ? secondLastValidClose : lastValidClose) ||
+      secondLastValidClose ||
+      (meta?.previousClose > 0 ? meta.previousClose : 0) ||
+      (meta?.chartPreviousClose > 0 ? meta.chartPreviousClose : 0)
     const isStale = isWeekend() || (meta?.marketState ?? '') !== 'REGULAR'
     return { price, prevClose, isStale }
   } catch { return null }
 }
 
+function yyyymmdd(date: Date): string {
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}01`
+}
+
 // TWSE 官方 API 抓報酬指數（發行量加權股價報酬指數）
 async function fetchTWSEReturnIndex(): Promise<{ price: number; prevClose: number; isStale: boolean } | null> {
   try {
-    const ctrl = new AbortController()
-    const tid  = setTimeout(() => ctrl.abort(), 8000)
-    // TWSE MFI94U：發行量加權股價報酬指數
-    const res  = await fetch('https://www.twse.com.tw/rwd/zh/indices/taiex/MFI94U?date=&response=json', {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
-      signal: ctrl.signal, cache: 'no-store',
-    })
-    clearTimeout(tid)
-    if (!res.ok) return null
-    const json = await res.json()
-    // 回傳格式：{ data: [["日期","收盤","漲跌","漲跌%",...]] }
-    const rows: string[][] = json?.data ?? []
+    const now = new Date()
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    let rows: string[][] = []
+
+    for (const date of [yyyymmdd(now), yyyymmdd(prevMonth)]) {
+      const ctrl = new AbortController()
+      const tid  = setTimeout(() => ctrl.abort(), 8000)
+      // TWSE MFI94U：發行量加權股價報酬指數
+      const res  = await fetch(`https://www.twse.com.tw/rwd/zh/indices/taiex/MFI94U?date=${date}&response=json`, {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+        signal: ctrl.signal, cache: 'no-store',
+      })
+      clearTimeout(tid)
+      if (!res.ok) continue
+      const json = await res.json()
+      rows = json?.data ?? []
+      if (rows.length >= 2) break
+    }
+
     if (rows.length < 2) return null
     // 最後一筆是最新交易日
     const latest = rows[rows.length - 1]
@@ -110,9 +128,13 @@ export async function GET(req: Request) {
         // fallback：^TWRIX Yahoo
         if (!data) data = await fetchYahoo('^TWRIX')
         if (!data && idx.fallbackPrice) {
+          const twiiChange = twiiData && twiiData.prevClose > 0
+            ? (twiiData.price - twiiData.prevClose) / twiiData.prevClose
+            : 0
+          const change = idx.fallbackPrice * twiiChange
           return {
             symbol: idx.symbol, name: idx.name, price: idx.fallbackPrice,
-            change: 0, changePct: 0, market: idx.market, currency: idx.currency,
+            change, changePct: twiiChange * 100, market: idx.market, currency: idx.currency,
             isStale: true, row: idx.row,
           }
         }
