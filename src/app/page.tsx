@@ -56,14 +56,31 @@ function latestSnapshotDateForMarket(snapshots: DailySnapshot[], market: MarketF
   return latestValid?.date
 }
 
-function trendValues(snapshots: DailySnapshot[], market: MarketFilter, days?: number) {
+function trendValues(snapshots: DailySnapshot[], market: MarketFilter, currentValue?: number, days?: number) {
   const key = getSnapshotKey(market)
   const marketDate = getSnapshotReportDate(key)
   const cutoff = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : undefined
-  return [...snapshots]
+  const values = [...snapshots]
     .filter(s => s.date <= marketDate && (!cutoff || s.date >= cutoff) && s[key] > 0)
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(s => s[key])
+  if (currentValue !== undefined && currentValue > 0 && values.at(-1) !== currentValue) values.push(currentValue)
+  return values
+}
+
+function todayTrendValues(snapshots: DailySnapshot[], market: MarketFilter, currentValue?: number) {
+  if (currentValue === undefined || currentValue <= 0) return []
+  const key = getSnapshotKey(market)
+  const marketDate = getSnapshotReportDate(key)
+  const latestValid = [...snapshots]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .find(s => s.date <= marketDate && s[key] > 0)
+  const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
+  const previous = [...snapshots]
+    .filter(s => s.date < reportDate && s[key] > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
+
+  return previous ? [previous[key], currentValue] : [currentValue]
 }
 
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
@@ -208,13 +225,15 @@ export default function DashboardPage() {
   )
   const statTrends = useMemo(() => {
     const snapshots = data?.snapshots ?? []
+    const currentValue = fSum?.totalAsset
     return {
-      all: trendValues(snapshots, market),
-      week: trendValues(snapshots, market, 7),
-      month: trendValues(snapshots, market, 31),
-      year: trendValues(snapshots, market, 366),
+      all: trendValues(snapshots, market, currentValue),
+      today: todayTrendValues(snapshots, market, currentValue),
+      week: trendValues(snapshots, market, currentValue, 7),
+      month: trendValues(snapshots, market, currentValue, 31),
+      year: trendValues(snapshots, market, currentValue, 366),
     }
-  }, [data, market])
+  }, [data, market, fSum?.totalAsset])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(var(--background))' }}>
@@ -290,7 +309,7 @@ export default function DashboardPage() {
                   highlight />
                 <StatCard label="今日變動" value={fmtSigned(s?.todayChange ?? 0)}
                   change={s?.todayChange} changePct={s?.todayChangePct}
-                  trend={statTrends.week}
+                  trend={statTrends.today}
                   lastUpdated={latestSnapDate} />
                 <StatCard label="本週變動" value={fmtSigned(s?.weekChange ?? 0)}
                   change={s?.weekChange} changePct={s?.weekChangePct}

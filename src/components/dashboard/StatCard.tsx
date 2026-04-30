@@ -56,7 +56,11 @@ export function StatCard({ label, value, subValue, change, changePct, trend, hig
   const isPos    = (change ?? 0) >= 0
   const isZero   = change === 0 || change === undefined
   const hasChange = change !== undefined
-  const trendPositive = trend && trend.length >= 2 ? trend[trend.length - 1] >= trend[0] : isPos
+  const trendPositive = hasChange
+    ? isPos
+    : trend && trend.length >= 2
+      ? trend[trend.length - 1] >= trend[0]
+      : isPos
 
   return (
     <div className={cn(
