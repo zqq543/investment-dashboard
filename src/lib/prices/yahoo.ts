@@ -32,23 +32,29 @@ export class YahooFinanceProvider implements PriceProvider {
       const chart = (await res.json())?.chart?.result?.[0]
       if (!chart) return null
       const meta   = chart.meta
-      const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as number[]
+      const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as Array<number | null>
       const valid  = closes.filter((v): v is number => v != null && v > 0)
 
-      // 週末強制用最後收盤（週五），不用 regularMarketPrice
+      // 週末強制用最後收盤，不用 regularMarketPrice，避免休市日產生假更新。
       const price = isWeekend()
         ? valid[valid.length - 1] || 0
         : ((meta?.regularMarketPrice > 0 ? meta.regularMarketPrice : 0) ||
-           (meta?.previousClose > 0 ? meta.previousClose : 0) ||
-           valid[valid.length - 1] || 0)
+           valid[valid.length - 1] ||
+           (meta?.previousClose > 0 ? meta.previousClose : 0) || 0)
 
       if (price <= 0) return null
 
-      // 前收用於計算漲跌
+      // Yahoo 的 chartPreviousClose 對部分台股 ETF 會回傳過舊價格。
+      // 今日漲跌優先用日線序列：若目前價還沒寫入日 K，最後有效收盤就是前收；
+      // 若目前價已等於最後有效收盤，則取倒數第二筆作為前收。
+      const lastValidClose = valid[valid.length - 1] || 0
+      const secondLastValidClose = valid[valid.length - 2] || 0
+      const lastCloseMatchesPrice = lastValidClose > 0 && Math.abs(lastValidClose - price) < 0.0001
       const prevClose =
+        (lastCloseMatchesPrice ? secondLastValidClose : lastValidClose) ||
+        secondLastValidClose ||
         (meta?.previousClose > 0 ? meta.previousClose : 0) ||
-        (meta?.chartPreviousClose > 0 ? meta.chartPreviousClose : 0) ||
-        (valid.length >= 2 ? valid[valid.length - 2] : 0)
+        (meta?.chartPreviousClose > 0 ? meta.chartPreviousClose : 0)
       const change = prevClose > 0 ? price - prevClose : 0
       const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
       const trend = valid.slice(-20)
