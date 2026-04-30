@@ -57,10 +57,10 @@ export class YahooFinanceProvider implements PriceProvider {
         (meta?.chartPreviousClose > 0 ? meta.chartPreviousClose : 0)
       const change = prevClose > 0 ? price - prevClose : 0
       const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
-      const trend = valid.slice(-20)
-      if (!isWeekend() && trend.length > 0 && Math.abs(trend[trend.length - 1] - price) > 0.0001) {
-        trend.push(price)
-      }
+
+      // 持股清單的迷你圖搭配「今日」欄位顯示，必須反映今日/最近交易日漲跌方向。
+      // 近月日線會造成「今日跌、線型仍往上」的誤解，所以這裡用前收到目前價。
+      const trend = prevClose > 0 ? [prevClose, price] : valid.slice(-2)
 
       return {
         symbol, price,

@@ -208,7 +208,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               <SortHeader label="股數" sortKey="shares" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden md:table-cell">均成本</th>
               <SortHeader label="現價" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden lg:table-cell">趨勢</th>
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden lg:table-cell">今日趨勢</th>
               <SortHeader label="今日" sortKey="dayChange" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="損益" sortKey="pnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
