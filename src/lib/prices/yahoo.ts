@@ -15,10 +15,37 @@ export class YahooFinanceProvider implements PriceProvider {
     return symbol.toUpperCase()
   }
 
+  private extractLatestSessionTrend(chart: any): number[] {
+    const timestamps = (chart?.timestamp ?? []) as number[]
+    const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as Array<number | null>
+    const gmtoffset = Number(chart?.meta?.gmtoffset ?? 0)
+    const points: { day: string; close: number }[] = []
+
+    for (let i = 0; i < timestamps.length; i++) {
+      const close = closes[i]
+      const ts = timestamps[i]
+      if (!Number.isFinite(ts) || close == null || close <= 0) continue
+      const day = new Date((ts + gmtoffset) * 1000).toISOString().slice(0, 10)
+      points.push({ day, close })
+    }
+
+    const lastDay = points[points.length - 1]?.day
+    if (!lastDay) return []
+
+    const session = points.filter(p => p.day === lastDay).map(p => p.close)
+    if (session.length <= 48) return session
+
+    const step = Math.ceil(session.length / 48)
+    const sampled = session.filter((_, i) => i % step === 0)
+    const last = session[session.length - 1]
+    return sampled[sampled.length - 1] === last ? sampled : [...sampled, last]
+  }
+
   async fetchPrice(symbol: string, market: Market): Promise<PriceData | null> {
-    // 取近一個月日線，供持股清單顯示迷你趨勢圖。
+    // 日線負責前收與今日漲跌；分時資料另抓，供持股清單顯示今日趨勢。
     const range = '1mo'
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(this.toYahooSymbol(symbol, market))}?interval=1d&range=${range}`
+    const yahooSymbol = this.toYahooSymbol(symbol, market)
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=${range}`
     try {
       const ctrl = new AbortController()
       const tid  = setTimeout(() => ctrl.abort(), 8000)
@@ -58,9 +85,28 @@ export class YahooFinanceProvider implements PriceProvider {
       const change = prevClose > 0 ? price - prevClose : 0
       const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
 
-      // 持股清單的迷你圖搭配「今日」欄位顯示，必須反映今日/最近交易日漲跌方向。
-      // 近月日線會造成「今日跌、線型仍往上」的誤解，所以這裡用前收到目前價。
-      const trend = prevClose > 0 ? [prevClose, price] : valid.slice(-2)
+      let trend: number[] = []
+      try {
+        const intradayUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=5m&range=5d`
+        const intradayCtrl = new AbortController()
+        const intradayTid = setTimeout(() => intradayCtrl.abort(), 8000)
+        const intradayRes = await fetch(intradayUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com' },
+          signal: intradayCtrl.signal, cache: 'no-store',
+        })
+        clearTimeout(intradayTid)
+        const intradayChart = intradayRes.ok ? (await intradayRes.json())?.chart?.result?.[0] : null
+        trend = this.extractLatestSessionTrend(intradayChart)
+      } catch {
+        trend = []
+      }
+
+      if (trend.length > 0 && Math.abs(trend[trend.length - 1] - price) > 0.0001) {
+        trend.push(price)
+      }
+      if (trend.length < 2) {
+        trend = prevClose > 0 ? [prevClose, price] : valid.slice(-2)
+      }
 
       return {
         symbol, price,
