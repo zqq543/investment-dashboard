@@ -30,7 +30,11 @@ function fmtSigned(n: number) { return `${n >= 0 ? '+' : ''}NT$${fmt(Math.abs(n)
 
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
-function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey) {
+function getTaiwanDate(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
   const latestValid = [...snapshots]
     .sort((a, b) => b.date.localeCompare(a.date))
     .find(s => typeof s[key] === 'number' && s[key] > 0)
@@ -44,22 +48,23 @@ function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey) {
     )
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  const latest = ordered[0]
-  const previous = ordered[1]
+  const latestSnapshotDate = ordered[0]?.date
+  const reportDate = [getTaiwanDate(), latestSnapshotDate].filter(Boolean).sort().at(-1) ?? getTaiwanDate()
+  const previous = ordered.find(s => s.date < reportDate)
 
   const calc = (base?: DailySnapshot) => {
-    const change = latest && base ? latest[key] - base[key] : 0
+    const change = base ? currentValue - base[key] : 0
     const pct = base && base[key] > 0 ? (change / base[key]) * 100 : 0
     return { change, pct }
   }
 
-  const latestDate = latest?.date ? new Date(`${latest.date}T00:00:00`) : new Date()
-  const weekAgo = new Date(latestDate)
+  const report = new Date(`${reportDate}T00:00:00`)
+  const weekAgo = new Date(report)
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weekAgoStr = weekAgo.toISOString().slice(0, 10)
   const weekBase = ordered.find(s => s.date <= weekAgoStr)
 
-  const monthStart = `${latestDate.getFullYear()}-${String(latestDate.getMonth() + 1).padStart(2, '0')}-01`
+  const monthStart = `${report.getFullYear()}-${String(report.getMonth() + 1).padStart(2, '0')}-01`
   const monthBase = ordered.find(s => s.date < monthStart)
 
   const today = calc(previous)
@@ -83,12 +88,12 @@ function filterSummary(
   snapshots: DailySnapshot[]
 ): PortfolioSummary {
   if (market === 'ALL') {
-    return { ...base, ...snapshotChanges(snapshots, 'totalAsset') }
+    return { ...base, ...snapshotChanges(snapshots, 'totalAsset', base.totalAsset) }
   }
   const filt  = holdings.filter(h => h.market === market)
   const sv    = filt.reduce((s, h) => s + (h.currentValue ?? 0), 0)
   const upnl  = filt.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
-  const changes = snapshotChanges(snapshots, market === '台股' ? 'twStockValue' : 'usStockValue')
+  const changes = snapshotChanges(snapshots, market === '台股' ? 'twStockValue' : 'usStockValue', sv)
   return { ...base, totalAsset: sv, stockValue: sv, unrealizedPnl: upnl, cash: 0,
     twStockValue: market === '台股' ? sv : 0, usStockValue: market === '美股' ? sv : 0,
     ...changes }
@@ -135,7 +140,7 @@ export default function DashboardPage() {
   }), [data])
 
   // PNL 追蹤（snapshots 是升序）
-  const pnlStats = usePnlHistory(data?.snapshots ?? [])
+  const pnlStats = usePnlHistory(data?.snapshots ?? [], market, fSum?.totalAsset)
 
   const s            = fSum
   const latestSnapDate = data?.snapshots?.at(-1)?.date
@@ -214,7 +219,22 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 圖表 */}
+        {/* PNL 發散圖 */}
+        <section>
+          {loading ? (
+            <div className="card p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="h-4 w-28 skeleton rounded" />
+                <div className="h-8 w-48 skeleton rounded" />
+              </div>
+              <div className="h-44 skeleton rounded-lg" />
+            </div>
+          ) : (
+            <PnlChart stats={pnlStats} market={market} />
+          )}
+        </section>
+
+        {/* 資產圖表 */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <div className="card p-4 sm:p-5 lg:col-span-2">
             {loading ? (
@@ -228,9 +248,6 @@ export default function DashboardPage() {
             {loading ? <div className="h-52 skeleton rounded-lg"/> : <DistributionChart distribution={fDist}/>}
           </div>
         </section>
-
-        {/* PNL 發散圖 */}
-        {!loading && <PnlChart stats={pnlStats} />}
 
         {/* 持股清單 */}
         <section className="card p-4 sm:p-5">

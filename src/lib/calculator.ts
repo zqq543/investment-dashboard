@@ -66,11 +66,58 @@ export function calcRealizedPnl(transactions: Transaction[], usdTwdRate = getDef
 // buildPortfolioSummary
 // snapshots：降序（最新在前）
 //
-// 今日/週/月 change：全部改用「快照之間的差值」
-// 不再用「即時 totalAsset vs 快照 totalAsset」
-// 原因：即時計算值和快照儲存值的基準可能不一致（匯率、現金計算方式不同）
-// 用快照之間比較才是穩定基準
+// 今日/週/月 change：用「目前即時計算值」對比歷史快照基準。
+// 今日盤中快照可能已經過期，所以不能拿今天某一筆快照當最新值。
 // ─────────────────────────────────────────────────────────
+function getTaiwanDate(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function calcChangesFromCurrent(
+  snapshots: DailySnapshot[],
+  key: 'totalAsset' | 'twStockValue' | 'usStockValue',
+  currentValue: number
+) {
+  const latestValid = snapshots.find(s => s[key] > 0)
+  const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
+  const validSnapshots = snapshots
+    .filter(s => s[key] > 0 && (!needsUsBreakdown || s.usStockValue > 0))
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  const latestSnapshotDate = validSnapshots[0]?.date
+  const reportDate = [getTaiwanDate(), latestSnapshotDate].filter(Boolean).sort().at(-1) ?? getTaiwanDate()
+
+  const calc = (base?: DailySnapshot) => {
+    const change = base ? currentValue - base[key] : 0
+    const pct = base && base[key] > 0 ? (change / base[key]) * 100 : 0
+    return { change, pct }
+  }
+
+  const prevDaySnap = validSnapshots.find(s => s.date < reportDate)
+
+  const report = new Date(`${reportDate}T00:00:00`)
+  const weekAgo = new Date(report)
+  weekAgo.setDate(weekAgo.getDate() - 7)
+  const weekAgoStr = weekAgo.toISOString().slice(0, 10)
+  const weekSnap = validSnapshots.find(s => s.date <= weekAgoStr)
+
+  const monthStart = `${report.getFullYear()}-${String(report.getMonth() + 1).padStart(2, '0')}-01`
+  const monthSnap = validSnapshots.find(s => s.date < monthStart)
+
+  const today = calc(prevDaySnap)
+  const week = calc(weekSnap)
+  const month = calc(monthSnap)
+
+  return {
+    todayChange: today.change,
+    todayChangePct: today.pct,
+    weekChange: week.change,
+    weekChangePct: week.pct,
+    monthChange: month.change,
+    monthChangePct: month.pct,
+  }
+}
+
 export function buildPortfolioSummary(
   holdings: Holding[],
   cash: number,
@@ -87,51 +134,12 @@ export function buildPortfolioSummary(
   const totalAsset    = cash + stockValue
   const unrealizedPnl = holdings.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
 
-  const latestValid = snapshots.find(s => s.totalAsset > 0)
-  const needsUsBreakdown = (latestValid?.usStockValue ?? 0) > 0
-  const validSnapshots = snapshots.filter(s =>
-    s.totalAsset > 0 && (!needsUsBreakdown || s.usStockValue > 0)
-  )
-
-  // 最新快照（作為「最近一天」的基準）
-  const latestSnap = validSnapshots[0]
-
-  // ── 今日變動：最新快照 vs 前一天快照 ────────────────
-  // 若只有一筆快照，today change = 0
-  const prevDaySnap  = validSnapshots[1]  // 降序第二筆 = 前一天
-  const todayChange  = latestSnap && prevDaySnap
-    ? latestSnap.totalAsset - prevDaySnap.totalAsset
-    : 0
-  const todayChangePct = prevDaySnap && prevDaySnap.totalAsset > 0
-    ? (todayChange / prevDaySnap.totalAsset) * 100 : 0
-
-  // ── 本週變動：最新快照 vs 7天前或更早的快照 ─────────
-  const weekAgo    = new Date()
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  const weekAgoStr = weekAgo.toISOString().split('T')[0]
-  const weekSnap   = validSnapshots.find(s => s.date <= weekAgoStr)
-  const weekChange = latestSnap && weekSnap
-    ? latestSnap.totalAsset - weekSnap.totalAsset
-    : 0
-  const weekChangePct = weekSnap && weekSnap.totalAsset > 0
-    ? (weekChange / weekSnap.totalAsset) * 100 : 0
-
-  // ── 本月變動：最新快照 vs 月初前的快照 ──────────────
-  const now        = new Date()
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-  const monthSnap  = validSnapshots.find(s => s.date < monthStart)
-  const monthChange = latestSnap && monthSnap
-    ? latestSnap.totalAsset - monthSnap.totalAsset
-    : 0
-  const monthChangePct = monthSnap && monthSnap.totalAsset > 0
-    ? (monthChange / monthSnap.totalAsset) * 100 : 0
+  const changes = calcChangesFromCurrent(snapshots, 'totalAsset', totalAsset)
 
   return {
     totalAsset, cash, stockValue, twStockValue, usStockValue,
     unrealizedPnl, realizedPnl,
-    todayChange,  todayChangePct,
-    weekChange,   weekChangePct,
-    monthChange,  monthChangePct,
+    ...changes,
     lastUpdated: new Date().toISOString(),
   }
 }

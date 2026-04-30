@@ -3,8 +3,12 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import type { PnlEntry, PnlStats } from '@/lib/usePnlHistory'
 import { cn } from '@/lib/utils'
+import type { MarketFilter } from '@/types'
 
-interface PnlChartProps { stats: PnlStats }
+interface PnlChartProps {
+  stats: PnlStats
+  market: MarketFilter
+}
 
 function fmt(n: number) {
   if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -43,16 +47,20 @@ function StatBadge({ label, value }: { label: string; value: number }) {
   )
 }
 
-export function PnlChart({ stats }: PnlChartProps) {
+export function PnlChart({ stats, market }: PnlChartProps) {
   // 只顯示最近 60 天
   const data = stats.history.slice(-60)
+  const marketLabel = market === 'ALL' ? '全部' : market
 
   return (
     <div className="card p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
-          每日損益 (發散圖)
-        </p>
+      <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
+            每日損益
+          </p>
+          <p className="text-sm font-medium mt-1">{marketLabel}</p>
+        </div>
         <div className="flex items-center gap-5">
           <StatBadge label="今日" value={stats.today} />
           <StatBadge label="本月累計" value={stats.month} />
@@ -61,12 +69,12 @@ export function PnlChart({ stats }: PnlChartProps) {
       </div>
 
       {data.length < 2 ? (
-        <div className="flex items-center justify-center h-36 text-muted-foreground text-sm">
+        <div className="flex items-center justify-center h-44 text-muted-foreground text-sm">
           累積 2 筆快照後顯示
         </div>
       ) : (
         <div className="w-full overflow-hidden">
-          <ResponsiveContainer width="100%" height={160}>
+          <ResponsiveContainer width="100%" height={190}>
             <BarChart data={data} margin={{ top: 4, right: 2, left: 0, bottom: 0 }} barSize={Math.max(2, Math.floor(600 / data.length) - 2)}>
               <XAxis
                 dataKey="date"
