@@ -32,6 +32,34 @@ function PriceSourceBadge({ source }: { source?: string }) {
   return <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', c.cls)}>{c.label}</span>
 }
 
+function Sparkline({ values, positive }: { values?: number[]; positive: boolean }) {
+  const pts = (values ?? []).filter(v => Number.isFinite(v) && v > 0)
+  if (pts.length < 2) {
+    return <div className="h-8 w-16 rounded bg-muted/60" />
+  }
+
+  const width = 72
+  const height = 32
+  const min = Math.min(...pts)
+  const max = Math.max(...pts)
+  const span = max - min || 1
+  const d = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * width
+    const y = height - ((v - min) / span) * (height - 4) - 2
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className={cn('h-8 w-16 overflow-visible', positive ? 'text-positive' : 'text-negative')}
+      aria-hidden="true"
+    >
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function getSortValue(h: Holding, key: SortKey, marketFilter: MarketFilter): number {
   const cur = h.currentPrice ?? h.avgCost
   const localValue = cur * h.shares
@@ -180,6 +208,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               <SortHeader label="股數" sortKey="shares" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden md:table-cell">均成本</th>
               <SortHeader label="現價" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden lg:table-cell">趨勢</th>
               <SortHeader label="今日" sortKey="dayChange" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="損益" sortKey="pnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
@@ -248,10 +277,18 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                       )}
                     </div>
                   </td>
+                  <td className="py-3.5 px-3 hidden lg:table-cell">
+                    <div className="flex justify-end">
+                      <Sparkline values={h.trend} positive={dayPos} />
+                    </div>
+                  </td>
                   <td className="py-3.5 px-3 text-right hidden sm:table-cell">
-                    <div className={cn('tabular-nums font-medium flex items-center justify-end gap-0.5', dayPos ? 'text-positive' : 'text-negative')}>
+                    <div className={cn(
+                      'inline-flex min-w-[4.75rem] items-center justify-center gap-1 rounded px-2 py-1 text-xs font-semibold tabular-nums text-white',
+                      dayPos ? 'bg-positive' : 'bg-negative'
+                    )}>
                       <span className={dayPos ? 'arrow-up' : 'arrow-down'}>{dayPos ? '▲' : '▼'}</span>
-                      {Math.abs(dayPct).toFixed(2)}%
+                      {dayPos ? '+' : '-'}{Math.abs(dayPct).toFixed(2)}%
                     </div>
                     <div className={cn('text-[11px] text-right tabular-nums', dayPos ? 'text-positive/80' : 'text-negative/80')}>
                       {dayChange >= 0 ? '+' : '-'}{formatMoney(dayChange, h.currency, 2)}

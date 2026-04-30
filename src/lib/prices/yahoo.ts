@@ -16,8 +16,8 @@ export class YahooFinanceProvider implements PriceProvider {
   }
 
   async fetchPrice(symbol: string, market: Market): Promise<PriceData | null> {
-    // 週末用 range=5d 確保取到週五收盤，平日用 range=2d 減少流量
-    const range = isWeekend() ? '5d' : '2d'
+    // 取近一個月日線，供持股清單顯示迷你趨勢圖。
+    const range = '1mo'
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(this.toYahooSymbol(symbol, market))}?interval=1d&range=${range}`
     try {
       const ctrl = new AbortController()
@@ -51,6 +51,10 @@ export class YahooFinanceProvider implements PriceProvider {
         (valid.length >= 2 ? valid[valid.length - 2] : 0)
       const change = prevClose > 0 ? price - prevClose : 0
       const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
+      const trend = valid.slice(-20)
+      if (!isWeekend() && trend.length > 0 && Math.abs(trend[trend.length - 1] - price) > 0.0001) {
+        trend.push(price)
+      }
 
       return {
         symbol, price,
@@ -60,6 +64,7 @@ export class YahooFinanceProvider implements PriceProvider {
         prevClose,
         change,
         changePct,
+        trend,
       }
     } catch { return null }
   }

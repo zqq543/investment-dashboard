@@ -22,6 +22,7 @@ export async function POST() {
     const result = Array.from(prices.entries()).map(([symbol, data]) => ({
       symbol, price: data.price, currency: data.currency, source: data.source,
       change: data.change, changePct: data.changePct,
+      trend: data.trend,
     }))
     return NextResponse.json({ data: result, refreshed: result.length, timestamp: new Date().toISOString() })
   } catch (err) {

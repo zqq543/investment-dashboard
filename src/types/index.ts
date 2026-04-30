@@ -20,6 +20,7 @@ export interface Holding {
   currentPrice?: number; currentValue?: number
   unrealizedPnl?: number; unrealizedPnlPct?: number
   dayChange?: number; dayChangePct?: number
+  trend?: number[]
   priceSource?: 'live' | 'daily' | 'fallback'
 }
 
@@ -49,6 +50,7 @@ export interface PriceData {
   symbol: string; price: number; currency: Currency
   source: 'live' | 'daily' | 'fallback'; timestamp: string
   prevClose?: number; change?: number; changePct?: number
+  trend?: number[]
 }
 
 export interface PriceCache {

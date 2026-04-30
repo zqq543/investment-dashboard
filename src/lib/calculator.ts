@@ -27,6 +27,7 @@ export function enrichHoldings(
       ...h, currentPrice, currentValue, unrealizedPnl, unrealizedPnlPct,
       dayChange: priceData?.change,
       dayChangePct: priceData?.changePct,
+      trend: priceData?.trend,
       priceSource: priceData?.source ?? 'fallback',
     }
   })
