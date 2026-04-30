@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Holding, MarketFilter } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +8,9 @@ interface HoldingsTableProps {
   holdings: Holding[]
   marketFilter?: MarketFilter
 }
+
+type SortKey = 'shares' | 'price' | 'value' | 'pnl'
+type SortDir = 'asc' | 'desc'
 
 function formatMoney(amount: number, currency: 'USD' | 'TWD', fractionDigits?: number) {
   const digits = fractionDigits ?? (currency === 'USD' ? 2 : 0)
@@ -29,7 +32,76 @@ function PriceSourceBadge({ source }: { source?: string }) {
   return <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', c.cls)}>{c.label}</span>
 }
 
+function getSortValue(h: Holding, key: SortKey, marketFilter: MarketFilter): number {
+  const cur = h.currentPrice ?? h.avgCost
+  const localValue = cur * h.shares
+  const localPnl = (cur - h.avgCost) * h.shares
+
+  if (key === 'shares') return h.shares
+  if (key === 'price') return cur
+
+  if (marketFilter === 'ALL') {
+    return key === 'value' ? (h.currentValue ?? 0) : (h.unrealizedPnl ?? 0)
+  }
+
+  if (h.currency === 'USD') return key === 'value' ? localValue : localPnl
+  return key === 'value' ? (h.currentValue ?? 0) : (h.unrealizedPnl ?? 0)
+}
+
+function SortHeader({
+  label, sortKey, activeKey, dir, onSort, className,
+}: {
+  label: string
+  sortKey: SortKey
+  activeKey: SortKey
+  dir: SortDir
+  onSort: (key: SortKey) => void
+  className?: string
+}) {
+  const active = activeKey === sortKey
+  return (
+    <th className={cn('text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide', className)}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          'inline-flex items-center justify-end gap-1 rounded px-1.5 py-1 transition-colors hover:bg-muted hover:text-foreground',
+          active && 'text-foreground'
+        )}
+        aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <span>{label}</span>
+        <span className={cn('text-[10px] tabular-nums', active ? 'opacity-100' : 'opacity-35')}>
+          {active ? (dir === 'asc' ? '↑' : '↓') : '↕'}
+        </span>
+      </button>
+    </th>
+  )
+}
+
 export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableProps) {
+  const [sortKey, setSortKey] = useState<SortKey>('value')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+      return
+    }
+    setSortKey(key)
+    setSortDir('desc')
+  }
+
+  const sortedHoldings = useMemo(() => [...holdings]
+    .map((h, index) => ({ h, index }))
+    .sort((a, b) => {
+      const av = getSortValue(a.h, sortKey, marketFilter)
+      const bv = getSortValue(b.h, sortKey, marketFilter)
+      const diff = sortDir === 'asc' ? av - bv : bv - av
+      return diff || a.index - b.index
+    })
+    .map(item => item.h), [holdings, sortKey, sortDir, marketFilter])
+
   const subtotal = useMemo(() => ({
     value: holdings.reduce((s, h) => s + (h.currentValue ?? 0), 0),
     pnl:   holdings.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0),
@@ -89,15 +161,15 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
           <thead>
             <tr className="border-b border-border">
               <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide">股票</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden sm:table-cell">股數</th>
+              <SortHeader label="股數" sortKey="shares" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden md:table-cell">均成本</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide">現價</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden sm:table-cell">市值</th>
-              <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide">損益</th>
+              <SortHeader label="現價" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
+              <SortHeader label="損益" sortKey="pnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {holdings.map(h => {
+            {sortedHoldings.map(h => {
               const pnl    = h.unrealizedPnl ?? 0
               const pnlPct = h.unrealizedPnlPct ?? 0
               const isPos  = pnl >= 0
