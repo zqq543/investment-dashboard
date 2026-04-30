@@ -31,7 +31,13 @@ export function usePnlHistory(snapshots: DailySnapshot[]): PnlStats {
     if (!snapshots.length) return
 
     // 從 snapshots 建立/更新每日 PNL（連續快照差值）
-    const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date))
+    const latestValid = [...snapshots]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .find(s => s.totalAsset > 0)
+    const needsUsBreakdown = (latestValid?.usStockValue ?? 0) > 0
+    const sorted = [...snapshots]
+      .filter(s => s.totalAsset > 0 && (!needsUsBreakdown || s.usStockValue > 0))
+      .sort((a, b) => a.date.localeCompare(b.date))
     const fromSnapshots: PnlEntry[] = []
     for (let i = 1; i < sorted.length; i++) {
       fromSnapshots.push({

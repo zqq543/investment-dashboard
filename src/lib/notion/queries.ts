@@ -2,6 +2,7 @@ import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoint
 import { getNotionClient, DB_IDS } from './client'
 import { getText, getNumber, getSelect, getDate } from './helpers'
 import type { Transaction, Cashflow, Holding, DailySnapshot } from '@/types'
+import { getDefaultUsdTwdRate } from '@/lib/prices/types'
 
 async function queryAll(dbId: string, sorts?: object[]): Promise<PageObjectResponse[]> {
   const notion = getNotionClient()
@@ -81,12 +82,37 @@ function parseDateFromTitle(raw: string): string {
   return m ? m[1] : ''
 }
 
+type RawSnap = DailySnapshot & { rawTitle: string }
+
+function normalizeSnapshotCurrency(snapshot: RawSnap): RawSnap {
+  const rate = getDefaultUsdTwdRate()
+  const rawTotal = snapshot.cash + snapshot.twStockValue + snapshot.usStockValue
+  const rawMatchesTotal = snapshot.totalAsset > 0
+    && Math.abs(rawTotal - snapshot.totalAsset) <= Math.max(1000, snapshot.totalAsset * 0.01)
+
+  const usLooksLikeUsd = snapshot.twStockValue > 5_000_000
+    && snapshot.usStockValue > 0
+    && snapshot.usStockValue < snapshot.twStockValue * 0.15
+
+  if (!rawMatchesTotal || !usLooksLikeUsd) return snapshot
+
+  const usStockValue = snapshot.usStockValue * rate
+  const stockValue = snapshot.twStockValue + usStockValue
+  const totalAsset = snapshot.cash + stockValue
+
+  return {
+    ...snapshot,
+    usStockValue,
+    stockValue,
+    totalAsset,
+  }
+}
+
 export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
   const dbId = DB_IDS.snapshot
   if (!dbId) return []
   const pages = await queryAll(dbId)
 
-  type RawSnap = DailySnapshot & { rawTitle: string }
   const all: RawSnap[] = pages
     .map(page => {
       const p = page.properties
@@ -118,6 +144,7 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
   }
 
   return Array.from(byDate.values())
+    .map(normalizeSnapshotCurrency)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, limit)
     .map(({ rawTitle: _r, ...rest }) => rest)

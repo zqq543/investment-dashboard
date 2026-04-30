@@ -37,7 +37,26 @@ function IndexItem({ idx }: { idx: IndexQuote }) {
   )
 }
 
-function IndexRows({ indices }: { indices: IndexQuote[] }) {
+const ROW_LABELS: Record<number, string> = {
+  0: '台股',
+  1: '全球 / 風險',
+  2: '美股',
+}
+
+function IndexGroup({ row, items }: { row: number; items: IndexQuote[] }) {
+  return (
+    <div className="min-w-0 border-l border-border/80 pl-3">
+      <p className="text-[10px] font-semibold text-muted-foreground tracking-wide mb-1">
+        {ROW_LABELS[row] ?? '指數'}
+      </p>
+      <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+        {items.map(idx => <IndexItem key={idx.symbol} idx={idx} />)}
+      </div>
+    </div>
+  )
+}
+
+function IndexRows({ indices, market }: { indices: IndexQuote[]; market: MarketFilter }) {
   const allStale = indices.every(i => i.isStale)
 
   // 依 row 分組
@@ -49,6 +68,21 @@ function IndexRows({ indices }: { indices: IndexQuote[] }) {
   }
 
   const rowKeys = Array.from(byRow.keys()).sort()
+
+  if (market === 'ALL') {
+    return (
+      <div className="w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-3">
+          {rowKeys.map(r => (
+            <IndexGroup key={r} row={r} items={byRow.get(r)!} />
+          ))}
+        </div>
+        {allStale && indices.length > 0 && (
+          <p className="text-[9px] text-muted-foreground mt-1.5">非交易時段 · 最後收盤</p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-1.5 items-start">
@@ -105,5 +139,5 @@ export function MarketIndices({ market }: { market: MarketFilter }) {
 
   if (!indices.length) return <span className="text-xs text-muted-foreground">載入中...</span>
 
-  return <IndexRows indices={indices} />
+  return <IndexRows indices={indices} market={market} />
 }

@@ -31,8 +31,17 @@ function fmtSigned(n: number) { return `${n >= 0 ? '+' : ''}NT$${fmt(Math.abs(n)
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey) {
+  const latestValid = [...snapshots]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .find(s => typeof s[key] === 'number' && s[key] > 0)
+  const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
+
   const ordered = [...snapshots]
-    .filter(s => typeof s[key] === 'number' && s[key] > 0)
+    .filter(s =>
+      typeof s[key] === 'number'
+      && s[key] > 0
+      && (!needsUsBreakdown || s.usStockValue > 0)
+    )
     .sort((a, b) => b.date.localeCompare(a.date))
 
   const latest = ordered[0]
@@ -174,7 +183,7 @@ export default function DashboardPage() {
             </div>
             {/* 右：指數行情 */}
             {!loading && (
-              <div className="min-w-0 lg:flex-1 lg:max-w-4xl">
+              <div className="min-w-0 lg:flex-1">
                 <MarketIndices market={market} />
               </div>
             )}

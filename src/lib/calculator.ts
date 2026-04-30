@@ -87,7 +87,11 @@ export function buildPortfolioSummary(
   const totalAsset    = cash + stockValue
   const unrealizedPnl = holdings.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
 
-  const validSnapshots = snapshots.filter(s => s.totalAsset > 0)
+  const latestValid = snapshots.find(s => s.totalAsset > 0)
+  const needsUsBreakdown = (latestValid?.usStockValue ?? 0) > 0
+  const validSnapshots = snapshots.filter(s =>
+    s.totalAsset > 0 && (!needsUsBreakdown || s.usStockValue > 0)
+  )
 
   // 最新快照（作為「最近一天」的基準）
   const latestSnap = validSnapshots[0]
