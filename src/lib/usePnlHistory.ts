@@ -59,7 +59,16 @@ export function usePnlHistory(
   market: MarketFilter = 'ALL',
   currentValue?: number
 ): PnlStats {
-  const [stats, setStats] = useState<PnlStats>({ today: 0, month: 0, year: 0, history: [] })
+  const [stats, setStats] = useState<PnlStats>({
+    today: 0,
+    month: 0,
+    year: 0,
+    monthUp: 0,
+    monthDown: 0,
+    yearUp: 0,
+    yearDown: 0,
+    history: [],
+  })
 
   useEffect(() => {
     if (!snapshots.length) return
