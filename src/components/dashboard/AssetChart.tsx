@@ -45,6 +45,19 @@ function calcPeriod(data: DailySnapshot[], key: keyof Pick<DailySnapshot, 'total
   return { pnl, pct: start > 0 ? (pnl / start) * 100 : 0 }
 }
 
+function calcVisibleDomain(data: DailySnapshot[], keys: Array<keyof Pick<DailySnapshot, 'totalAsset' | 'twStockValue' | 'usStockValue'>>) {
+  const values = data.flatMap(s => keys.map(k => s[k]).filter(v => Number.isFinite(v) && v > 0))
+  if (!values.length) return ['auto', 'auto'] as const
+
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = Math.max(max - min, max * 0.015, 1)
+  return [
+    Math.max(0, Math.floor((min - span * 0.35) / 1000) * 1000),
+    Math.ceil((max + span * 0.35) / 1000) * 1000,
+  ] as [number, number]
+}
+
 interface TipProps {
   active?: boolean
   payload?: { payload: DailySnapshot; color: string; name: string; value: number }[]
@@ -123,6 +136,14 @@ export function AssetChart({ snapshots, marketFilter }: { snapshots: DailySnapsh
   const rangeLabel = RANGES.find(r => r.key === range)?.label ?? ''
 
   const noMarketData = (marketFilter === '台股' && !hasTW) || (marketFilter === '美股' && !hasUS)
+  const visibleKeys = useMemo<Array<keyof Pick<DailySnapshot, 'totalAsset' | 'twStockValue' | 'usStockValue'>>>(() => (
+    marketFilter === '台股'
+      ? ['twStockValue']
+      : marketFilter === '美股'
+        ? ['usStockValue']
+        : ['totalAsset', 'twStockValue', 'usStockValue']
+  ), [marketFilter])
+  const yDomain = useMemo(() => calcVisibleDomain(filtered, visibleKeys), [filtered, visibleKeys])
 
   return (
     <div>
@@ -173,7 +194,8 @@ export function AssetChart({ snapshots, marketFilter }: { snapshots: DailySnapsh
                 axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40}/>
               <YAxis tickFormatter={fmtAxis}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                axisLine={false} tickLine={false} width={52}/>
+                axisLine={false} tickLine={false} width={52}
+                domain={yDomain}/>
               <Tooltip content={<ChartTooltip />}/>
 
               {showAll && (
