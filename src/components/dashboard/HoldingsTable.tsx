@@ -92,7 +92,6 @@ function SortHeader({
           'inline-flex items-center justify-end gap-1 rounded px-1.5 py-1 transition-colors hover:bg-muted hover:text-foreground',
           active && 'text-foreground'
         )}
-        aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <span>{label}</span>
         <span className={cn('text-[10px] tabular-nums', active ? 'opacity-100' : 'opacity-35')}>

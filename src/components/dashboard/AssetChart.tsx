@@ -47,7 +47,7 @@ function calcPeriod(data: DailySnapshot[], key: keyof Pick<DailySnapshot, 'total
 
 function calcVisibleDomain(data: DailySnapshot[], keys: Array<keyof Pick<DailySnapshot, 'totalAsset' | 'twStockValue' | 'usStockValue'>>) {
   const values = data.flatMap(s => keys.map(k => s[k]).filter(v => Number.isFinite(v) && v > 0))
-  if (!values.length) return ['auto', 'auto'] as const
+  if (!values.length) return ['auto', 'auto'] as [string, string]
 
   const min = Math.min(...values)
   const max = Math.max(...values)
