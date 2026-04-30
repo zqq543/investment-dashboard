@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { DailySnapshot, MarketFilter } from '@/types'
+import { getSnapshotReportDate } from './market-date'
 
 export interface PnlEntry { date: string; pnl: number }
 
@@ -39,10 +40,6 @@ function saveStored(market: MarketFilter, entries: PnlEntry[]) {
   localStorage.setItem(getStorageKey(market), JSON.stringify(keep))
 }
 
-function getTaiwanDate(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
 function countMoves(entries: PnlEntry[]) {
   return {
     up: entries.filter(e => e.pnl > 0).length,
@@ -74,13 +71,14 @@ export function usePnlHistory(
     if (!snapshots.length) return
 
     const key = getSnapshotKey(market)
+    const marketDate = getSnapshotReportDate(key)
     // 從 snapshots 建立/更新每日 PNL（連續快照差值）
     const latestValid = [...snapshots]
       .sort((a, b) => b.date.localeCompare(a.date))
-      .find(s => s[key] > 0)
+      .find(s => s.date <= marketDate && s[key] > 0)
     const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
     const sorted = [...snapshots]
-      .filter(s => s[key] > 0 && (!needsUsBreakdown || s.usStockValue > 0))
+      .filter(s => s.date <= marketDate && s[key] > 0 && (!needsUsBreakdown || s.usStockValue > 0))
       .sort((a, b) => a.date.localeCompare(b.date))
     const fromSnapshots: PnlEntry[] = []
     for (let i = 1; i < sorted.length; i++) {
@@ -100,7 +98,7 @@ export function usePnlHistory(
       .map(([date, pnl]) => ({ date, pnl }))
       .sort((a, b) => a.date.localeCompare(b.date)))
 
-    const reportDate = [getTaiwanDate(), latestValid?.date].filter(Boolean).sort().at(-1) ?? getTaiwanDate()
+    const reportDate = marketDate
     const previous = sorted.filter(s => s.date < reportDate).at(-1)
     if (currentValue !== undefined && previous) {
       merged.set(reportDate, currentValue - previous[key])

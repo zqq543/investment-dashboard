@@ -12,6 +12,7 @@ import { PnlChart } from '@/components/dashboard/PnlChart'
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Skeleton'
 import { usePnlHistory } from '@/lib/usePnlHistory'
 import { cn } from '@/lib/utils'
+import { getSnapshotReportDate } from '@/lib/market-date'
 import type { PortfolioSummary, Holding, Transaction, DailySnapshot, AssetDistribution, MarketFilter } from '@/types'
 
 const TABS: { key: MarketFilter; label: string; short: string }[] = [
@@ -30,10 +31,6 @@ function fmtSigned(n: number) { return `${n >= 0 ? '+' : ''}NT$${fmt(Math.abs(n)
 
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
-function getTaiwanDate(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
 function getWeekStart(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   const day = d.getDay()
@@ -43,21 +40,23 @@ function getWeekStart(dateStr: string): string {
 }
 
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
+  const marketDate = getSnapshotReportDate(key)
   const latestValid = [...snapshots]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .find(s => typeof s[key] === 'number' && s[key] > 0)
+    .find(s => s.date <= marketDate && typeof s[key] === 'number' && s[key] > 0)
   const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
 
   const ordered = [...snapshots]
     .filter(s =>
+      s.date <= marketDate
+      &&
       typeof s[key] === 'number'
       && s[key] > 0
       && (!needsUsBreakdown || s.usStockValue > 0)
     )
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  const latestSnapshotDate = ordered[0]?.date
-  const reportDate = [getTaiwanDate(), latestSnapshotDate].filter(Boolean).sort().at(-1) ?? getTaiwanDate()
+  const reportDate = marketDate
   const previous = ordered.find(s => s.date < reportDate)
 
   const calc = (base?: DailySnapshot) => {

@@ -4,6 +4,7 @@ import type {
 } from '@/types'
 import type { PriceData } from '@/types'
 import { getDefaultUsdTwdRate } from './prices/types'
+import { getSnapshotReportDate } from './market-date'
 
 export function toTWD(amount: number, currency: 'USD' | 'TWD', rate?: number): number {
   if (currency === 'TWD') return amount
@@ -69,10 +70,6 @@ export function calcRealizedPnl(transactions: Transaction[], usdTwdRate = getDef
 // 今日/週/月 change：用「目前即時計算值」對比歷史快照基準。
 // 今日盤中快照可能已經過期，所以不能拿今天某一筆快照當最新值。
 // ─────────────────────────────────────────────────────────
-function getTaiwanDate(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
 function getWeekStart(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   const day = d.getDay()
@@ -86,14 +83,14 @@ function calcChangesFromCurrent(
   key: 'totalAsset' | 'twStockValue' | 'usStockValue',
   currentValue: number
 ) {
-  const latestValid = snapshots.find(s => s[key] > 0)
+  const marketDate = getSnapshotReportDate(key)
+  const latestValid = snapshots.find(s => s.date <= marketDate && s[key] > 0)
   const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
   const validSnapshots = snapshots
-    .filter(s => s[key] > 0 && (!needsUsBreakdown || s.usStockValue > 0))
+    .filter(s => s.date <= marketDate && s[key] > 0 && (!needsUsBreakdown || s.usStockValue > 0))
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  const latestSnapshotDate = validSnapshots[0]?.date
-  const reportDate = [getTaiwanDate(), latestSnapshotDate].filter(Boolean).sort().at(-1) ?? getTaiwanDate()
+  const reportDate = marketDate
 
   const calc = (base?: DailySnapshot) => {
     const change = base ? currentValue - base[key] : 0

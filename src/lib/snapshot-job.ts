@@ -4,6 +4,7 @@ import {
 } from '@/lib/notion/queries'
 import { getPrices } from '@/lib/prices/cache'
 import { enrichHoldings, calcCash, calcRealizedPnl, buildPortfolioSummary } from '@/lib/calculator'
+import { getMarketAwareDate } from '@/lib/market-date'
 
 export function getPreviousTWDate(): string {
   const now = new Date()
@@ -15,7 +16,7 @@ export function getPreviousTWDate(): string {
 export function getCurrentTWDateTime(): { date: string; datetime: string } {
   const now = new Date()
   const tw = new Date(now.getTime() + 8 * 60 * 60 * 1000)
-  const date = tw.toISOString().slice(0, 10)
+  const date = getMarketAwareDate(now)
   const hhmm = tw.toISOString().slice(11, 16)
   return { date, datetime: `${date} ${hhmm}` }
 }
