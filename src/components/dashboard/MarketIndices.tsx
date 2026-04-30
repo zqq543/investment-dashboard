@@ -109,7 +109,15 @@ function IndexRows({ indices, market }: { indices: IndexQuote[]; market: MarketF
   )
 }
 
-export function MarketIndices({ market }: { market: MarketFilter }) {
+export function MarketIndices({
+  market,
+  refreshIntervalSec = 180,
+  autoRefreshEnabled = true,
+}: {
+  market: MarketFilter
+  refreshIntervalSec?: number
+  autoRefreshEnabled?: boolean
+}) {
   const [indices, setIndices] = useState<IndexQuote[]>([])
   const [loading, setLoading] = useState(true)
   const prevRef = useRef<MarketFilter | null>(null)
@@ -127,9 +135,10 @@ export function MarketIndices({ market }: { market: MarketFilter }) {
   useEffect(() => {
     if (prevRef.current !== market) { setIndices([]); setLoading(true); prevRef.current = market }
     fetch_(market)
-    const t = setInterval(() => fetch_(market), 3 * 60 * 1000)
+    if (!autoRefreshEnabled) return
+    const t = setInterval(() => fetch_(market), refreshIntervalSec * 1000)
     return () => clearInterval(t)
-  }, [market, fetch_])
+  }, [market, fetch_, refreshIntervalSec, autoRefreshEnabled])
 
   if (loading) {
     return (

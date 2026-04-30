@@ -3,38 +3,63 @@
 import { useEffect, useState, useRef } from 'react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
-const AUTO_REFRESH_SEC = 5 * 60
+const REFRESH_OPTIONS = [
+  { label: '30秒', value: 30 },
+  { label: '1分', value: 60 },
+  { label: '3分', value: 180 },
+  { label: '5分', value: 300 },
+  { label: '10分', value: 600 },
+]
 
 interface HeaderProps {
   lastUpdated?: string
   onRefresh?: () => void
   isRefreshing?: boolean
+  refreshIntervalSec?: number
+  onRefreshIntervalChange?: (seconds: number) => void
+  autoRefreshEnabled?: boolean
+  marketStatusLabel?: string
 }
 
-export function Header({ lastUpdated, onRefresh, isRefreshing }: HeaderProps) {
-  const [countdown, setCountdown] = useState(AUTO_REFRESH_SEC)
+export function Header({
+  lastUpdated,
+  onRefresh,
+  isRefreshing,
+  refreshIntervalSec = 300,
+  onRefreshIntervalChange,
+  autoRefreshEnabled = true,
+  marketStatusLabel,
+}: HeaderProps) {
+  const [countdown, setCountdown] = useState(refreshIntervalSec)
   const onRefreshRef = useRef(onRefresh)
   const isRefreshingRef = useRef(isRefreshing)
+  const autoRefreshRef = useRef(autoRefreshEnabled)
 
   useEffect(() => { onRefreshRef.current = onRefresh }, [onRefresh])
   useEffect(() => { isRefreshingRef.current = isRefreshing }, [isRefreshing])
+  useEffect(() => { autoRefreshRef.current = autoRefreshEnabled }, [autoRefreshEnabled])
 
   // 自動刷新倒數
   useEffect(() => {
+    if (!autoRefreshEnabled) {
+      setCountdown(refreshIntervalSec)
+      return
+    }
+
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          if (onRefreshRef.current && !isRefreshingRef.current) onRefreshRef.current()
-          return AUTO_REFRESH_SEC
+          if (onRefreshRef.current && !isRefreshingRef.current && autoRefreshRef.current) onRefreshRef.current()
+          return refreshIntervalSec
         }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [autoRefreshEnabled, refreshIntervalSec])
 
   // 刷新完成後重置倒數
-  useEffect(() => { setCountdown(AUTO_REFRESH_SEC) }, [lastUpdated])
+  useEffect(() => { setCountdown(refreshIntervalSec) }, [lastUpdated, refreshIntervalSec])
 
   const timeStr = lastUpdated
     ? new Date(lastUpdated).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -66,11 +91,26 @@ export function Header({ lastUpdated, onRefresh, isRefreshing }: HeaderProps) {
               更新 {timeStr}
             </span>
           )}
+          <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className={autoRefreshEnabled ? 'text-positive' : ''}>
+              {marketStatusLabel ?? (autoRefreshEnabled ? '開盤中' : '休市')}
+            </span>
+            <select
+              value={refreshIntervalSec}
+              onChange={e => onRefreshIntervalChange?.(Number(e.target.value))}
+              className="h-8 rounded-lg border border-border bg-card px-2 text-xs text-foreground outline-none"
+              title="自動更新頻率"
+            >
+              {REFRESH_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
           {onRefresh && (
             <button
-              onClick={() => { onRefresh(); setCountdown(AUTO_REFRESH_SEC) }}
+              onClick={() => { onRefresh(); setCountdown(refreshIntervalSec) }}
               disabled={isRefreshing}
-              title={`自動刷新倒數 ${cdStr}，點此立即刷新`}
+              title={autoRefreshEnabled ? `自動刷新倒數 ${cdStr}，點此立即刷新` : '目前休市，點此仍可手動刷新'}
               className="flex items-center gap-1 px-2 sm:px-2.5 h-8 text-xs font-medium rounded-lg border border-border bg-card hover:bg-muted transition-colors disabled:opacity-50"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -79,7 +119,7 @@ export function Header({ lastUpdated, onRefresh, isRefreshing }: HeaderProps) {
                 <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
               </svg>
               <span className="hidden sm:inline text-muted-foreground tabular-nums">
-                {isRefreshing ? '更新中' : cdStr}
+                {isRefreshing ? '更新中' : autoRefreshEnabled ? cdStr : '休市'}
               </span>
             </button>
           )}

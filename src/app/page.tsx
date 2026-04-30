@@ -13,6 +13,7 @@ import { CardSkeleton, TableSkeleton } from '@/components/ui/Skeleton'
 import { usePnlHistory } from '@/lib/usePnlHistory'
 import { cn } from '@/lib/utils'
 import { getSnapshotReportDate } from '@/lib/market-date'
+import { getMarketSession } from '@/lib/market-hours'
 import type { PortfolioSummary, Holding, Transaction, DailySnapshot, AssetDistribution, MarketFilter } from '@/types'
 
 const TABS: { key: MarketFilter; label: string; short: string }[] = [
@@ -135,6 +136,8 @@ export default function DashboardPage() {
   const [error,        setError]        = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [market,       setMarket]       = useState<MarketFilter>('ALL')
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState(300)
+  const [clock, setClock] = useState(() => new Date())
 
   const fetchData = useCallback(async () => {
     try {
@@ -149,11 +152,26 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem('dashboard-refresh-sec'))
+    if ([30, 60, 180, 300, 600].includes(saved)) setRefreshIntervalSec(saved)
+  }, [])
+
+  useEffect(() => {
+    const t = setInterval(() => setClock(new Date()), 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
     try { await fetch('/api/prices', { method: 'POST' }); await fetchData() }
     finally { setIsRefreshing(false) }
   }, [fetchData])
+
+  const handleRefreshIntervalChange = useCallback((seconds: number) => {
+    setRefreshIntervalSec(seconds)
+    window.localStorage.setItem('dashboard-refresh-sec', String(seconds))
+  }, [])
 
   const fHoldings = useMemo(() => !data ? [] : market === 'ALL' ? data.holdings : data.holdings.filter(h => h.market === market), [data, market])
   const fTxns     = useMemo(() => !data ? [] : market === 'ALL' ? data.transactions : data.transactions.filter(t => t.market === market), [data, market])
@@ -163,6 +181,7 @@ export default function DashboardPage() {
     return { cash: 0, stocks: data.distribution.stocks.filter(s => s.market === market) }
   }, [data, market])
   const fSum   = useMemo(() => !data ? null : filterSummary(data.holdings, market, data.summary, data.snapshots), [data, market])
+  const marketSession = useMemo(() => getMarketSession(market, clock), [market, clock])
   const counts = useMemo(() => ({
     ALL: data?.holdings.length ?? 0,
     台股: data?.holdings.filter(h => h.market === '台股').length ?? 0,
@@ -180,7 +199,15 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(var(--background))' }}>
-      <Header lastUpdated={data?.timestamp} onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+      <Header
+        lastUpdated={data?.timestamp}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        refreshIntervalSec={refreshIntervalSec}
+        onRefreshIntervalChange={handleRefreshIntervalChange}
+        autoRefreshEnabled={marketSession.shouldRefresh}
+        marketStatusLabel={marketSession.label}
+      />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
@@ -223,7 +250,7 @@ export default function DashboardPage() {
             {/* 右：指數行情 */}
             {!loading && (
               <div className="min-w-0 lg:flex-1">
-                <MarketIndices market={market} />
+                <MarketIndices market={market} refreshIntervalSec={refreshIntervalSec} autoRefreshEnabled={marketSession.shouldRefresh} />
               </div>
             )}
           </div>
