@@ -20,6 +20,18 @@ function fmtNT(n: number) {
   return `${n >= 0 ? '+' : ''}NT$${Math.abs(n).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
 }
 
+function fmtPct(n?: number) {
+  if (n === undefined) return ''
+  return ` (${n >= 0 ? '+' : ''}${n.toFixed(2)}%)`
+}
+
+function fmtRange(start?: string, end?: string) {
+  if (!start || !end) return undefined
+  const s = start.slice(5).replace('-', '/')
+  const e = end.slice(5).replace('-', '/')
+  return `${s}~${e}`
+}
+
 interface TipProps { active?: boolean; payload?: { payload: PnlEntry }[] }
 function Tip({ active, payload }: TipProps) {
   if (!active || !payload?.length) return null
@@ -35,14 +47,34 @@ function Tip({ active, payload }: TipProps) {
   )
 }
 
-function StatBadge({ label, value, detail }: { label: string; value: number; detail?: string }) {
+function StatBadge({
+  label,
+  value,
+  pct,
+  range,
+  up,
+  down,
+}: {
+  label: string
+  value: number
+  pct?: number
+  range?: string
+  up?: number
+  down?: number
+}) {
   const pos = value >= 0
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex flex-col items-center gap-0.5 min-w-[4.75rem]">
+      {range && <span className="text-[9px] text-muted-foreground tabular-nums">{range}</span>}
+      {up !== undefined && down !== undefined && (
+        <span className="text-[9px] text-muted-foreground">
+          漲<span className="text-positive tabular-nums mx-0.5">{up}</span>
+          跌<span className="text-negative tabular-nums mx-0.5">{down}</span>
+        </span>
+      )}
       <span className="text-[10px] text-muted-foreground">{label}</span>
-      {detail && <span className="text-[9px] text-muted-foreground tabular-nums">{detail}</span>}
       <span className={cn('text-xs font-semibold tabular-nums', pos ? 'text-positive' : 'text-negative')}>
-        {fmtNT(value)}
+        {fmtNT(value)}{fmtPct(pct)}
       </span>
     </div>
   )
@@ -52,9 +84,8 @@ export function PnlChart({ stats, market }: PnlChartProps) {
   // 只顯示最近 60 天
   const data = stats.history.slice(-60)
   const marketLabel = market === 'ALL' ? '全部' : market
-  const yearRange = stats.yearStart && stats.yearEnd
-    ? `${stats.yearStart.slice(5)} - ${stats.yearEnd.slice(5)}`
-    : undefined
+  const monthRange = fmtRange(stats.monthStart, stats.monthEnd)
+  const yearRange = fmtRange(stats.yearStart, stats.yearEnd)
 
   return (
     <div className="card p-4 sm:p-5">
@@ -65,10 +96,24 @@ export function PnlChart({ stats, market }: PnlChartProps) {
           </p>
           <p className="text-sm font-medium mt-1">{marketLabel}</p>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-start gap-4 sm:gap-5 flex-wrap">
           <StatBadge label="今日" value={stats.today} />
-          <StatBadge label="本月累計" value={stats.month} />
-          <StatBadge label="今年累計" value={stats.year} detail={yearRange} />
+          <StatBadge
+            label="本月累計"
+            value={stats.month}
+            pct={stats.monthPct}
+            range={monthRange}
+            up={stats.monthUp}
+            down={stats.monthDown}
+          />
+          <StatBadge
+            label="今年累計"
+            value={stats.year}
+            pct={stats.yearPct}
+            range={yearRange}
+            up={stats.yearUp}
+            down={stats.yearDown}
+          />
         </div>
       </div>
 

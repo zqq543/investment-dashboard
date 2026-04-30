@@ -73,6 +73,14 @@ function getTaiwanDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
+function getWeekStart(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  d.setDate(diff)
+  return d.toISOString().slice(0, 10)
+}
+
 function calcChangesFromCurrent(
   snapshots: DailySnapshot[],
   key: 'totalAsset' | 'twStockValue' | 'usStockValue',
@@ -95,17 +103,18 @@ function calcChangesFromCurrent(
 
   const prevDaySnap = validSnapshots.find(s => s.date < reportDate)
 
+  const ascSnapshots = [...validSnapshots].reverse()
   const report = new Date(`${reportDate}T00:00:00`)
-  const weekAgo = new Date(report)
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  const weekAgoStr = weekAgo.toISOString().slice(0, 10)
-  const weekSnap = validSnapshots.find(s => s.date <= weekAgoStr)
+  const weekStart = getWeekStart(reportDate)
+  const weekSnap = ascSnapshots.find(s => s.date >= weekStart && s.date < reportDate)
+    ?? validSnapshots.find(s => s.date < weekStart)
 
   const monthStart = `${report.getFullYear()}-${String(report.getMonth() + 1).padStart(2, '0')}-01`
-  const monthSnap = validSnapshots.find(s => s.date < monthStart)
+  const monthSnap = ascSnapshots.find(s => s.date >= monthStart && s.date < reportDate)
+    ?? validSnapshots.find(s => s.date < monthStart)
   const yearStart = `${report.getFullYear()}-01-01`
-  const yearSnap = validSnapshots.find(s => s.date < yearStart)
-    ?? [...validSnapshots].reverse().find(s => s.date.startsWith(String(report.getFullYear())))
+  const yearSnap = ascSnapshots.find(s => s.date >= yearStart && s.date < reportDate)
+    ?? validSnapshots.find(s => s.date < yearStart)
 
   const today = calc(prevDaySnap)
   const week = calc(weekSnap)

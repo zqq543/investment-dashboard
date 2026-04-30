@@ -108,6 +108,14 @@ function normalizeSnapshotCurrency(snapshot: RawSnap): RawSnap {
   }
 }
 
+function isInvalidSnapshot(p: PageObjectResponse['properties'], snap: RawSnap): boolean {
+  const validProp = p['有效快照']
+  const explicitInvalid = validProp?.type === 'checkbox'
+    && validProp.checkbox === false
+    && snap.totalAsset <= 0
+  return explicitInvalid || snap.totalAsset <= 0
+}
+
 export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
   const dbId = DB_IDS.snapshot
   if (!dbId) return []
@@ -119,7 +127,7 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
       const raw = getText(p['日期'])
       const date = parseDateFromTitle(raw)
       if (!date) return null
-      return {
+      const snap = {
         id: page.id,
         date,
         rawTitle: raw,
@@ -131,6 +139,7 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
         dailyPnl: getNumber(p['當日損益']),
         note: getText(p['備註']),
       }
+      return isInvalidSnapshot(p, snap) ? null : snap
     })
     .filter((s): s is RawSnap => s !== null && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
 
@@ -175,6 +184,10 @@ export async function upsertSnapshot(
     股票市值: { number: snapshot.stockValue },
     台股市值: { number: snapshot.twStockValue },
     美股市值: { number: snapshot.usStockValue },
+    美股市值USD: { number: snapshot.usStockValue / getDefaultUsdTwdRate() },
+    美元台幣匯率: { number: getDefaultUsdTwdRate() },
+    資料來源: { select: { name: 'daily' } },
+    有效快照: { checkbox: true },
     總資產:   { number: snapshot.totalAsset },
     當日損益: { number: snapshot.dailyPnl },
     備註:     { rich_text: [{ text: { content: snapshot.note } }] },
@@ -219,6 +232,10 @@ export async function upsertIntradaySnapshot(snapshot: {
     股票市值: { number: snapshot.stockValue },
     台股市值: { number: snapshot.twStockValue },
     美股市值: { number: snapshot.usStockValue },
+    美股市值USD: { number: snapshot.usStockValue / getDefaultUsdTwdRate() },
+    美元台幣匯率: { number: getDefaultUsdTwdRate() },
+    資料來源: { select: { name: 'intraday' } },
+    有效快照: { checkbox: true },
     總資產:   { number: snapshot.totalAsset },
     當日損益: { number: snapshot.dailyPnl },
     備註:     { rich_text: [{ text: { content: snapshot.note } }] },

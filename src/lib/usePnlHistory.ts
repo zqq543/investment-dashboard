@@ -7,6 +7,10 @@ export interface PnlEntry { date: string; pnl: number }
 
 export interface PnlStats {
   today: number; month: number; year: number
+  monthPct?: number; yearPct?: number
+  monthUp: number; monthDown: number
+  yearUp: number; yearDown: number
+  monthStart?: string; monthEnd?: string
   yearStart?: string; yearEnd?: string
   history: PnlEntry[]
 }
@@ -37,6 +41,17 @@ function saveStored(market: MarketFilter, entries: PnlEntry[]) {
 
 function getTaiwanDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function countMoves(entries: PnlEntry[]) {
+  return {
+    up: entries.filter(e => e.pnl > 0).length,
+    down: entries.filter(e => e.pnl < 0).length,
+  }
+}
+
+function pct(change: number, base?: number) {
+  return base && base > 0 ? (change / base) * 100 : undefined
 }
 
 export function usePnlHistory(
@@ -90,16 +105,30 @@ export function usePnlHistory(
     const ym    = reportDate.slice(0, 7)
     const year  = reportDate.slice(0, 4)
 
+    const monthEntries = history.filter(e => e.date.startsWith(ym))
     const yearEntries = history.filter(e => e.date.startsWith(year))
+    const monthStart = sorted.find(s => s.date.startsWith(ym))?.date ?? monthEntries[0]?.date
     const yearStart = sorted.find(s => s.date.startsWith(year))?.date ?? yearEntries[0]?.date
     const todayPnl = merged.get(today) ?? 0
-    const monthPnl = history.filter(e => e.date.startsWith(ym)).reduce((s, e) => s + e.pnl, 0)
+    const monthPnl = monthEntries.reduce((s, e) => s + e.pnl, 0)
     const yearPnl  = yearEntries.reduce((s, e) => s + e.pnl, 0)
+    const monthBase = sorted.find(s => s.date === monthStart)?.[key]
+    const yearBase = sorted.find(s => s.date === yearStart)?.[key]
+    const monthMoves = countMoves(monthEntries)
+    const yearMoves = countMoves(yearEntries)
 
     setStats({
       today: todayPnl,
       month: monthPnl,
       year: yearPnl,
+      monthPct: pct(monthPnl, monthBase),
+      yearPct: pct(yearPnl, yearBase),
+      monthUp: monthMoves.up,
+      monthDown: monthMoves.down,
+      yearUp: yearMoves.up,
+      yearDown: yearMoves.down,
+      monthStart,
+      monthEnd: monthStart ? reportDate : undefined,
       yearStart,
       yearEnd: yearStart ? reportDate : undefined,
       history,

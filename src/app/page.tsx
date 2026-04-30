@@ -34,6 +34,14 @@ function getTaiwanDate(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
+function getWeekStart(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  d.setDate(diff)
+  return d.toISOString().slice(0, 10)
+}
+
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
   const latestValid = [...snapshots]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -58,17 +66,18 @@ function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, curr
     return { change, pct }
   }
 
+  const asc = [...ordered].reverse()
   const report = new Date(`${reportDate}T00:00:00`)
-  const weekAgo = new Date(report)
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  const weekAgoStr = weekAgo.toISOString().slice(0, 10)
-  const weekBase = ordered.find(s => s.date <= weekAgoStr)
+  const weekStart = getWeekStart(reportDate)
+  const weekBase = asc.find(s => s.date >= weekStart && s.date < reportDate)
+    ?? ordered.find(s => s.date < weekStart)
 
   const monthStart = `${report.getFullYear()}-${String(report.getMonth() + 1).padStart(2, '0')}-01`
-  const monthBase = ordered.find(s => s.date < monthStart)
+  const monthBase = asc.find(s => s.date >= monthStart && s.date < reportDate)
+    ?? ordered.find(s => s.date < monthStart)
   const yearStart = `${report.getFullYear()}-01-01`
-  const yearBase = ordered.find(s => s.date < yearStart)
-    ?? [...ordered].reverse().find(s => s.date.startsWith(String(report.getFullYear())))
+  const yearBase = asc.find(s => s.date >= yearStart && s.date < reportDate)
+    ?? ordered.find(s => s.date < yearStart)
 
   const today = calc(previous)
   const week = calc(weekBase)
