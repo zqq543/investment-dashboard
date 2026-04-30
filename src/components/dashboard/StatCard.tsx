@@ -30,7 +30,7 @@ export function StatCard({ label, value, subValue, change, changePct, highlight 
 
       <div className={cn(
         'tabular-nums font-semibold leading-tight whitespace-nowrap',
-        highlight ? 'text-[clamp(1.85rem,3vw,2.7rem)] font-bold' : 'text-xl sm:text-2xl',
+        highlight ? 'text-2xl sm:text-3xl font-bold' : 'text-xl sm:text-2xl',
         hasChange && !isZero ? (isPos ? 'text-positive' : 'text-negative') : ''
       )}>
         {value}

@@ -77,7 +77,7 @@ function SortHeader({
 export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('value')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [showUsd, setShowUsd] = useState(false)
+  const [showConverted, setShowConverted] = useState(false)
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -110,6 +110,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
   }), [holdings])
 
   const hasUsdHolding = holdings.some(h => h.currency === 'USD')
+  const showConvertedValues = showConverted && hasUsdHolding
   const pnlPos = subtotal.pnl >= 0
   const title  = marketFilter === 'ALL' ? '持股清單' : `${marketFilter} 持股`
 
@@ -130,39 +131,43 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
         <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
           {title}<span className="ml-2 font-normal normal-case tracking-normal opacity-70">({holdings.length} 檔)</span>
         </p>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap justify-end">
+        <div className="flex items-start gap-4 text-xs text-muted-foreground flex-wrap justify-end">
           {hasUsdHolding && (
             <button
               type="button"
-              onClick={() => setShowUsd(v => !v)}
+              onClick={() => setShowConverted(v => !v)}
               className={cn(
                 'rounded-md border border-border px-2 py-1 text-[11px] transition-colors',
-                showUsd ? 'bg-muted text-foreground' : 'hover:bg-muted/60'
+                showConverted ? 'bg-muted text-foreground' : 'hover:bg-muted/60'
               )}
             >
-              {showUsd ? '隱藏美元' : '顯示美元'}
+              顯示台幣/美金
             </button>
           )}
-          <span>市值 <span className="text-foreground font-medium tabular-nums">
-            {formatMoney(subtotal.value, 'TWD')}
-          </span></span>
-          {showUsd && hasUsdHolding && (
-            <span className="text-[11px] tabular-nums">
-              {formatMoney(subtotal.usdValue, 'USD')}
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            損益
-            <span className={cn('font-medium tabular-nums flex items-center gap-0.5 inline-flex', pnlPos ? 'text-positive' : 'text-negative')}>
-              <span className={pnlPos ? 'arrow-up' : 'arrow-down'}>{pnlPos ? '▲' : '▼'}</span>
-              {formatMoney(subtotal.pnl, 'TWD')}
-            </span>
-            {showUsd && hasUsdHolding && (
-              <span className={cn('text-[11px] tabular-nums', subtotal.usdPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
-                {subtotal.usdPnl >= 0 ? '+' : '-'}{formatMoney(subtotal.usdPnl, 'USD')}
-              </span>
+          <div className="min-w-[9.5rem] text-right">
+            <div>市值 <span className="text-foreground font-medium tabular-nums">
+              {formatMoney(subtotal.value, 'TWD')}
+            </span></div>
+            {showConvertedValues && (
+              <div className="text-[11px] tabular-nums mt-0.5">
+                {formatMoney(subtotal.usdValue, 'USD')}
+              </div>
             )}
-          </span>
+          </div>
+          <div className="min-w-[9.5rem] text-right">
+            <div className="flex items-center justify-end gap-1">
+              損益
+              <span className={cn('font-medium tabular-nums flex items-center gap-0.5 inline-flex', pnlPos ? 'text-positive' : 'text-negative')}>
+                <span className={pnlPos ? 'arrow-up' : 'arrow-down'}>{pnlPos ? '▲' : '▼'}</span>
+                {formatMoney(subtotal.pnl, 'TWD')}
+              </span>
+            </div>
+            {showConvertedValues && (
+              <div className={cn('text-[11px] tabular-nums mt-0.5', subtotal.usdPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
+                {subtotal.usdPnl >= 0 ? '+' : '-'}{formatMoney(subtotal.usdPnl, 'USD')}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -217,10 +222,10 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums hidden sm:table-cell">{h.shares.toLocaleString()}</td>
                   <td className="py-3.5 px-3 text-right tabular-nums text-muted-foreground hidden md:table-cell">
-                    <div>{formatMoney(avgCostTwd, 'TWD', 2)}</div>
-                    {isUS && showUsd && (
+                    <div>{formatMoney(h.avgCost, h.currency, 2)}</div>
+                    {isUS && showConvertedValues && (
                       <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                        {formatMoney(h.avgCost, 'USD', 2)}
+                        {formatMoney(avgCostTwd, 'TWD', 2)}
                       </div>
                     )}
                   </td>
@@ -228,13 +233,13 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                     <div className="flex flex-col items-end gap-0.5">
                       <div className="flex items-center gap-1">
                         <span className="tabular-nums font-medium">
-                          {formatMoney(curTwd, 'TWD', 2)}
+                          {formatMoney(cur, h.currency, 2)}
                         </span>
                         <PriceSourceBadge source={h.priceSource} />
                       </div>
-                      {isUS && showUsd && (
+                      {isUS && showConvertedValues && (
                         <span className="text-[11px] text-muted-foreground tabular-nums">
-                          {formatMoney(cur, 'USD', 2)}
+                          {formatMoney(curTwd, 'TWD', 2)}
                         </span>
                       )}
                       <span className={cn('text-xs tabular-nums hidden sm:flex items-center gap-0.5', dayPos ? 'text-positive' : 'text-negative')}>
@@ -245,7 +250,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums font-medium hidden sm:table-cell">
                     <div>{formatMoney(displayValue, 'TWD')}</div>
-                    {isUS && showUsd && (
+                    {isUS && showConvertedValues && (
                       <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
                         {formatMoney(localValue, 'USD')}
                       </div>
@@ -259,7 +264,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                     <div className={cn('text-xs text-right', displayPnlPos ? 'text-positive' : 'text-negative')}>
                       {displayPnlPos ? '+' : ''}{pnlPct.toFixed(2)}%
                     </div>
-                    {isUS && showUsd && (
+                    {isUS && showConvertedValues && (
                       <div className={cn('text-[11px] text-right tabular-nums', localPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
                         {localPnl >= 0 ? '+' : '-'}{formatMoney(localPnl, 'USD')}
                       </div>
