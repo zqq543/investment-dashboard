@@ -49,15 +49,18 @@ export class YahooFinanceProvider implements PriceProvider {
         (meta?.previousClose > 0 ? meta.previousClose : 0) ||
         (meta?.chartPreviousClose > 0 ? meta.chartPreviousClose : 0) ||
         (valid.length >= 2 ? valid[valid.length - 2] : 0)
+      const change = prevClose > 0 ? price - prevClose : 0
+      const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
 
       return {
         symbol, price,
         currency: market === '台股' ? 'TWD' : 'USD',
         source: 'daily',
         timestamp: new Date().toISOString(),
-        // 額外傳 prevClose 供指數漲跌計算用
         prevClose,
-      } as PriceData & { prevClose: number }
+        change,
+        changePct,
+      }
     } catch { return null }
   }
 

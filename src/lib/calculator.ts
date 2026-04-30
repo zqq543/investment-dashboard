@@ -25,6 +25,8 @@ export function enrichHoldings(
     const unrealizedPnlPct = costTWD > 0 ? (unrealizedPnl / costTWD) * 100 : 0
     return {
       ...h, currentPrice, currentValue, unrealizedPnl, unrealizedPnlPct,
+      dayChange: priceData?.change,
+      dayChangePct: priceData?.changePct,
       priceSource: priceData?.source ?? 'fallback',
     }
   })

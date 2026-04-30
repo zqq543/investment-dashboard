@@ -19,6 +19,7 @@ export interface Holding {
   shares: number; avgCost: number; currency: Currency; note: string
   currentPrice?: number; currentValue?: number
   unrealizedPnl?: number; unrealizedPnlPct?: number
+  dayChange?: number; dayChangePct?: number
   priceSource?: 'live' | 'daily' | 'fallback'
 }
 
@@ -47,6 +48,7 @@ export interface AssetDistribution {
 export interface PriceData {
   symbol: string; price: number; currency: Currency
   source: 'live' | 'daily' | 'fallback'; timestamp: string
+  prevClose?: number; change?: number; changePct?: number
 }
 
 export interface PriceCache {

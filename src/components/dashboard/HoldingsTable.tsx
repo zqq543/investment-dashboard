@@ -9,7 +9,7 @@ interface HoldingsTableProps {
   marketFilter?: MarketFilter
 }
 
-type SortKey = 'shares' | 'price' | 'value' | 'pnl'
+type SortKey = 'shares' | 'price' | 'dayChange' | 'value' | 'pnl'
 type SortDir = 'asc' | 'desc'
 
 function formatMoney(amount: number, currency: 'USD' | 'TWD', fractionDigits?: number) {
@@ -39,6 +39,7 @@ function getSortValue(h: Holding, key: SortKey, marketFilter: MarketFilter): num
 
   if (key === 'shares') return h.shares
   if (key === 'price') return marketFilter === 'ALL' && h.currency === 'USD' ? cur * rate : cur
+  if (key === 'dayChange') return h.dayChangePct ?? 0
 
   return key === 'value' ? (h.currentValue ?? 0) : (h.unrealizedPnl ?? 0)
 }
@@ -179,6 +180,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               <SortHeader label="股數" sortKey="shares" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden md:table-cell">均成本</th>
               <SortHeader label="現價" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortHeader label="今日" sortKey="dayChange" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="損益" sortKey="pnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
@@ -186,7 +188,6 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
           <tbody className="divide-y divide-border">
             {sortedHoldings.map(h => {
               const pnl    = h.unrealizedPnl ?? 0
-              const pnlPct = h.unrealizedPnlPct ?? 0
               const cur    = h.currentPrice ?? h.avgCost
               const isUS    = h.currency === 'USD'
               const localValue = cur * h.shares
@@ -198,7 +199,10 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               const displayValue = currentValueTwd
               const displayPnl = pnl
               const displayPnlPos = displayPnl >= 0
-              const dayPct = h.avgCost > 0 ? ((cur - h.avgCost) / h.avgCost) * 100 : 0
+              const positionPct = h.unrealizedPnlPct ?? 0
+              const positionPos = positionPct >= 0
+              const dayPct = h.dayChangePct ?? 0
+              const dayChange = h.dayChange ?? 0
               const dayPos = dayPct >= 0
 
               return (
@@ -215,9 +219,9 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                       )}
                     </div>
                     {h.name && <div className="text-xs text-muted-foreground mt-0.5">{h.name}</div>}
-                    <div className={cn('text-xs tabular-nums mt-0.5 sm:hidden flex items-center gap-0.5', dayPos ? 'text-positive' : 'text-negative')}>
-                      <span className={dayPos ? 'arrow-up' : 'arrow-down'}>{dayPos ? '▲' : '▼'}</span>
-                      {Math.abs(dayPct).toFixed(2)}%
+                    <div className={cn('text-xs tabular-nums mt-0.5 sm:hidden flex items-center gap-0.5', positionPos ? 'text-positive' : 'text-negative')}>
+                      <span className={positionPos ? 'arrow-up' : 'arrow-down'}>{positionPos ? '▲' : '▼'}</span>
+                      持倉 {Math.abs(positionPct).toFixed(2)}%
                     </div>
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums hidden sm:table-cell">{h.shares.toLocaleString()}</td>
@@ -242,10 +246,15 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                           {formatMoney(curTwd, 'TWD', 2)}
                         </span>
                       )}
-                      <span className={cn('text-xs tabular-nums hidden sm:flex items-center gap-0.5', dayPos ? 'text-positive' : 'text-negative')}>
-                        <span className={dayPos ? 'arrow-up' : 'arrow-down'}>{dayPos ? '▲' : '▼'}</span>
-                        {Math.abs(dayPct).toFixed(2)}%
-                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-3 text-right hidden sm:table-cell">
+                    <div className={cn('tabular-nums font-medium flex items-center justify-end gap-0.5', dayPos ? 'text-positive' : 'text-negative')}>
+                      <span className={dayPos ? 'arrow-up' : 'arrow-down'}>{dayPos ? '▲' : '▼'}</span>
+                      {Math.abs(dayPct).toFixed(2)}%
+                    </div>
+                    <div className={cn('text-[11px] text-right tabular-nums', dayPos ? 'text-positive/80' : 'text-negative/80')}>
+                      {dayChange >= 0 ? '+' : '-'}{formatMoney(dayChange, h.currency, 2)}
                     </div>
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums font-medium hidden sm:table-cell">
@@ -262,13 +271,17 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                       {formatMoney(displayPnl, 'TWD')}
                     </div>
                     <div className={cn('text-xs text-right', displayPnlPos ? 'text-positive' : 'text-negative')}>
-                      {displayPnlPos ? '+' : ''}{pnlPct.toFixed(2)}%
+                      持倉 {displayPnlPos ? '+' : ''}{positionPct.toFixed(2)}%
                     </div>
                     {isUS && showConvertedValues && (
                       <div className={cn('text-[11px] text-right tabular-nums', localPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
                         {localPnl >= 0 ? '+' : '-'}{formatMoney(localPnl, 'USD')}
                       </div>
                     )}
+                    <div className={cn('text-[11px] tabular-nums mt-0.5 sm:hidden flex items-center justify-end gap-0.5', dayPos ? 'text-positive' : 'text-negative')}>
+                      <span className={dayPos ? 'arrow-up' : 'arrow-down'}>{dayPos ? '▲' : '▼'}</span>
+                      今日 {Math.abs(dayPct).toFixed(2)}%
+                    </div>
                   </td>
                 </tr>
               )
