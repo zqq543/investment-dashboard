@@ -84,6 +84,8 @@ function parseDateFromTitle(raw: string): string {
 
 type RawSnap = DailySnapshot & { rawTitle: string }
 
+const SNAPSHOT_MIN_DATE = '2026-04-27'
+
 function normalizeSnapshotCurrency(snapshot: RawSnap): RawSnap {
   const rate = getDefaultUsdTwdRate()
   const rawTotal = snapshot.cash + snapshot.twStockValue + snapshot.usStockValue
@@ -141,7 +143,11 @@ export async function getDailySnapshots(limit = 90): Promise<DailySnapshot[]> {
       }
       return isInvalidSnapshot(p, snap) ? null : snap
     })
-    .filter((s): s is RawSnap => s !== null && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
+    .filter((s): s is RawSnap =>
+      s !== null
+      && /^\d{4}-\d{2}-\d{2}$/.test(s.date)
+      && s.date >= SNAPSHOT_MIN_DATE
+    )
 
   // 每天只保留最後一筆（rawTitle 字母序最大 = 時間最晚）
   const byDate = new Map<string, RawSnap>()
