@@ -280,15 +280,14 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase mb-3">
             {market === 'ALL' ? '資產總覽' : `${market} 資產`}
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             {loading ? <><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/></> : (
               <>
                 <StatCard label={market === 'ALL' ? '總資產' : `${market}持股市值`}
                   value={`NT$${fmt(s?.totalAsset ?? 0)}`}
                   subValue={`未實現 ${(s?.unrealizedPnl ?? 0) >= 0 ? '+' : ''}NT$${fmt(Math.abs(s?.unrealizedPnl ?? 0))}`}
                   trend={statTrends.all}
-                  highlight
-                  className="col-span-2" />
+                  highlight />
                 <StatCard label="今日變動" value={fmtSigned(s?.todayChange ?? 0)}
                   change={s?.todayChange} changePct={s?.todayChangePct}
                   trend={statTrends.week}

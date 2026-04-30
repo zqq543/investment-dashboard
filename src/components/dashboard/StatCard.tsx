@@ -18,8 +18,8 @@ function MiniTrend({ values, positive }: { values?: number[]; positive: boolean 
   const pts = (values ?? []).filter(v => Number.isFinite(v) && v > 0)
   if (pts.length < 2) return null
 
-  const width = 92
-  const height = 34
+  const width = 56
+  const height = 20
   const min = Math.min(...pts)
   const max = Math.max(...pts)
   const span = max - min || 1
@@ -32,10 +32,10 @@ function MiniTrend({ values, positive }: { values?: number[]; positive: boolean 
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className={positive ? 'text-positive h-8 w-20 sm:w-24' : 'text-negative h-8 w-20 sm:w-24'}
+      className={positive ? 'text-positive h-5 w-14 opacity-90' : 'text-negative h-5 w-14 opacity-90'}
       aria-hidden="true"
     >
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -48,25 +48,25 @@ export function StatCard({ label, value, subValue, change, changePct, trend, hig
 
   return (
     <div className={cn(
-      'card p-4 sm:p-5 flex flex-col gap-1.5 min-w-0 transition-shadow hover:shadow-md',
+      'card p-3.5 sm:p-4 flex flex-col gap-1.5 min-w-0 transition-shadow hover:shadow-md',
       highlight && 'ring-1 ring-accent/20 bg-gradient-to-br from-card to-accent/5',
       className
     )}>
-      <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase truncate">
-        {label}
-      </span>
-
-      <div className="flex items-start justify-between gap-2 min-w-0">
-        <div className={cn(
-          'tabular-nums font-semibold leading-tight whitespace-nowrap min-w-0',
-          highlight ? 'text-2xl sm:text-3xl font-bold' : 'text-xl sm:text-2xl',
-          hasChange && !isZero ? (isPos ? 'text-positive' : 'text-negative') : ''
-        )}>
-          {value}
-        </div>
-        <div className="hidden sm:block flex-shrink-0 pt-0.5">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase truncate">
+          {label}
+        </span>
+        <div className="hidden sm:block flex-shrink-0">
           <MiniTrend values={trend} positive={trendPositive} />
         </div>
+      </div>
+
+      <div className={cn(
+        'tabular-nums font-semibold leading-tight whitespace-nowrap min-w-0',
+        highlight ? 'text-xl sm:text-2xl font-bold' : 'text-xl sm:text-2xl',
+        hasChange && !isZero ? (isPos ? 'text-positive' : 'text-negative') : ''
+      )}>
+        {value}
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap min-h-[1.1rem]">

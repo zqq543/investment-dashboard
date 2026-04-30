@@ -14,6 +14,7 @@ module.exports = {
     'bg-blue-500/15', 'text-blue-500',
     'bg-green-600/15', 'text-green-600',
     'bg-positive', 'bg-negative', 'bg-positive/15', 'bg-negative/15', 'bg-accent/15',
+    'bg-muted/45', 'bg-border/70',
     'text-white',
     'animate-spin', 'animate-fade-in',
     'divide-y', 'divide-border', 'hover:bg-muted/40',

@@ -65,16 +65,19 @@ function StatBadge({
   const pos = value >= 0
   const moveLabel = up !== undefined && down !== undefined ? `漲${up} 跌${down}` : undefined
   return (
-    <div className="min-w-0 text-right sm:text-center">
-      <div className="h-4 text-[10px] text-muted-foreground tabular-nums leading-none">
-        {range ?? ''}
-      </div>
-      <div className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
-        {label}{moveLabel ? ` (${moveLabel})` : ''}
+    <div className="min-w-0 rounded-lg bg-muted/45 px-3 py-2 text-left">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span>{label}</span>
+        {range && <span className="tabular-nums">{range}</span>}
       </div>
       <div className={cn('mt-1 text-sm font-semibold tabular-nums whitespace-nowrap', pos ? 'text-positive' : 'text-negative')}>
         {fmtNT(value)}{fmtPct(pct)}
       </div>
+      {moveLabel && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">
+          {moveLabel}
+        </div>
+      )}
     </div>
   )
 }
@@ -88,14 +91,14 @@ export function PnlChart({ stats, market }: PnlChartProps) {
 
   return (
     <div className="card p-3 sm:p-4">
-      <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
-        <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-[7rem]">
           <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
             每日損益
           </p>
           <p className="text-sm font-medium mt-1">{marketLabel}</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 w-full sm:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[46rem]">
           <StatBadge label="今日" value={stats.today} />
           <StatBadge
             label="本月累計"
@@ -115,6 +118,7 @@ export function PnlChart({ stats, market }: PnlChartProps) {
           />
         </div>
       </div>
+      <div className="my-3 h-px bg-border/70" />
 
       {data.length < 2 ? (
         <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
