@@ -26,15 +26,19 @@ function PercentBadge({ pct, positive }: { pct?: number; positive: boolean }) {
   )
 }
 
-function MiniTrend({ values, positive }: { values?: number[]; positive: boolean }) {
+function MiniTrend({ values, positive, stableScale = false }: { values?: number[]; positive: boolean; stableScale?: boolean }) {
   const pts = (values ?? []).filter(v => Number.isFinite(v))
   if (pts.length < 2) return null
 
   const width = 56
   const height = 20
-  const min = Math.min(...pts)
-  const max = Math.max(...pts)
-  const span = max - min || 1
+  const rawMin = Math.min(...pts)
+  const rawMax = Math.max(...pts)
+  const anchor = Math.max(Math.abs(pts[pts.length - 1] ?? 0), 1)
+  const minSpan = stableScale ? anchor * 0.02 : 0
+  const span = Math.max(rawMax - rawMin, minSpan, 1)
+  const mid = (rawMin + rawMax) / 2
+  const min = stableScale ? mid - span / 2 : rawMin
   const d = pts.map((v, i) => {
     const x = (i / (pts.length - 1)) * width
     const y = height - ((v - min) / span) * (height - 4) - 2
@@ -73,7 +77,7 @@ export function StatCard({ label, value, subValue, change, changePct, trend, hig
           {label}
         </span>
         <div className="hidden sm:block flex-shrink-0">
-          <MiniTrend values={trend} positive={trendPositive} />
+          <MiniTrend values={trend} positive={trendPositive} stableScale={highlight} />
         </div>
       </div>
 
