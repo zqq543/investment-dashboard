@@ -103,10 +103,14 @@ function calcChangesFromCurrent(
 
   const monthStart = `${report.getFullYear()}-${String(report.getMonth() + 1).padStart(2, '0')}-01`
   const monthSnap = validSnapshots.find(s => s.date < monthStart)
+  const yearStart = `${report.getFullYear()}-01-01`
+  const yearSnap = validSnapshots.find(s => s.date < yearStart)
+    ?? [...validSnapshots].reverse().find(s => s.date.startsWith(String(report.getFullYear())))
 
   const today = calc(prevDaySnap)
   const week = calc(weekSnap)
   const month = calc(monthSnap)
+  const year = calc(yearSnap)
 
   return {
     todayChange: today.change,
@@ -115,6 +119,8 @@ function calcChangesFromCurrent(
     weekChangePct: week.pct,
     monthChange: month.change,
     monthChangePct: month.pct,
+    yearChange: year.change,
+    yearChangePct: year.pct,
   }
 }
 

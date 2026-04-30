@@ -44,14 +44,25 @@ const ROW_LABELS: Record<number, string> = {
 }
 
 function IndexGroup({ row, items }: { row: number; items: IndexQuote[] }) {
+  const [primary, ...rest] = items
+
   return (
     <div className="min-w-0 border-l border-border/80 pl-3">
       <p className="text-[10px] font-semibold text-muted-foreground tracking-wide mb-1">
         {ROW_LABELS[row] ?? '指數'}
       </p>
-      <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
-        {items.map(idx => <IndexItem key={idx.symbol} idx={idx} />)}
-      </div>
+      {row === 0 && primary ? (
+        <div className="flex flex-col gap-2">
+          <IndexItem idx={primary} />
+          <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+            {rest.map(idx => <IndexItem key={idx.symbol} idx={idx} />)}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+          {items.map(idx => <IndexItem key={idx.symbol} idx={idx} />)}
+        </div>
+      )}
     </div>
   )
 }

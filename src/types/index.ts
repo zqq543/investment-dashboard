@@ -35,6 +35,7 @@ export interface PortfolioSummary {
   todayChange: number; todayChangePct: number
   weekChange: number; weekChangePct: number
   monthChange: number; monthChangePct: number
+  yearChange: number; yearChangePct: number
   lastUpdated: string
 }
 

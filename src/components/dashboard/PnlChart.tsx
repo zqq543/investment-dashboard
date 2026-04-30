@@ -35,11 +35,12 @@ function Tip({ active, payload }: TipProps) {
   )
 }
 
-function StatBadge({ label, value }: { label: string; value: number }) {
+function StatBadge({ label, value, detail }: { label: string; value: number; detail?: string }) {
   const pos = value >= 0
   return (
     <div className="flex flex-col items-center gap-0.5">
       <span className="text-[10px] text-muted-foreground">{label}</span>
+      {detail && <span className="text-[9px] text-muted-foreground tabular-nums">{detail}</span>}
       <span className={cn('text-xs font-semibold tabular-nums', pos ? 'text-positive' : 'text-negative')}>
         {fmtNT(value)}
       </span>
@@ -51,6 +52,9 @@ export function PnlChart({ stats, market }: PnlChartProps) {
   // 只顯示最近 60 天
   const data = stats.history.slice(-60)
   const marketLabel = market === 'ALL' ? '全部' : market
+  const yearRange = stats.yearStart && stats.yearEnd
+    ? `${stats.yearStart.slice(5)} - ${stats.yearEnd.slice(5)}`
+    : undefined
 
   return (
     <div className="card p-4 sm:p-5">
@@ -64,7 +68,7 @@ export function PnlChart({ stats, market }: PnlChartProps) {
         <div className="flex items-center gap-5">
           <StatBadge label="今日" value={stats.today} />
           <StatBadge label="本月累計" value={stats.month} />
-          <StatBadge label="今年累計" value={stats.year} />
+          <StatBadge label="今年累計" value={stats.year} detail={yearRange} />
         </div>
       </div>
 

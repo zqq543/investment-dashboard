@@ -7,6 +7,7 @@ export interface PnlEntry { date: string; pnl: number }
 
 export interface PnlStats {
   today: number; month: number; year: number
+  yearStart?: string; yearEnd?: string
   history: PnlEntry[]
 }
 
@@ -89,11 +90,20 @@ export function usePnlHistory(
     const ym    = reportDate.slice(0, 7)
     const year  = reportDate.slice(0, 4)
 
+    const yearEntries = history.filter(e => e.date.startsWith(year))
+    const yearStart = sorted.find(s => s.date.startsWith(year))?.date ?? yearEntries[0]?.date
     const todayPnl = merged.get(today) ?? 0
     const monthPnl = history.filter(e => e.date.startsWith(ym)).reduce((s, e) => s + e.pnl, 0)
-    const yearPnl  = history.filter(e => e.date.startsWith(year)).reduce((s, e) => s + e.pnl, 0)
+    const yearPnl  = yearEntries.reduce((s, e) => s + e.pnl, 0)
 
-    setStats({ today: todayPnl, month: monthPnl, year: yearPnl, history })
+    setStats({
+      today: todayPnl,
+      month: monthPnl,
+      year: yearPnl,
+      yearStart,
+      yearEnd: yearStart ? reportDate : undefined,
+      history,
+    })
   }, [snapshots, market, currentValue])
 
   return stats

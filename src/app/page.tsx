@@ -66,10 +66,14 @@ function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, curr
 
   const monthStart = `${report.getFullYear()}-${String(report.getMonth() + 1).padStart(2, '0')}-01`
   const monthBase = ordered.find(s => s.date < monthStart)
+  const yearStart = `${report.getFullYear()}-01-01`
+  const yearBase = ordered.find(s => s.date < yearStart)
+    ?? [...ordered].reverse().find(s => s.date.startsWith(String(report.getFullYear())))
 
   const today = calc(previous)
   const week = calc(weekBase)
   const month = calc(monthBase)
+  const year = calc(yearBase)
 
   return {
     todayChange: today.change,
@@ -78,6 +82,8 @@ function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, curr
     weekChangePct: week.pct,
     monthChange: month.change,
     monthChangePct: month.pct,
+    yearChange: year.change,
+    yearChangePct: year.pct,
   }
 }
 
@@ -173,18 +179,19 @@ export default function DashboardPage() {
                     )}>
                     <span className="sm:hidden">{tab.short}</span>
                     <span className="hidden sm:inline">{tab.label}</span>
+                    {!loading && (
+                      <span className={cn(
+                        'text-[11px] font-semibold tabular-nums leading-none px-1.5 py-0.5 rounded-full',
+                        market === tab.key
+                          ? 'bg-accent-foreground/15 text-accent-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      )}>
+                        {counts[tab.key]}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
-              {!loading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
-                  <span>全部 <strong className="text-foreground">{counts.ALL}</strong></span>
-                  <span className="opacity-40">·</span>
-                  <span>台股 <strong className="text-positive">{counts.台股}</strong></span>
-                  <span className="opacity-40">·</span>
-                  <span>美股 <strong className="text-negative">{counts.美股}</strong></span>
-                </div>
-              )}
             </div>
             {/* 右：指數行情 */}
             {!loading && (
@@ -200,8 +207,8 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase mb-3">
             {market === 'ALL' ? '資產總覽' : `${market} 資產`}
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            {loading ? <><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/></> : (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            {loading ? <><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/></> : (
               <>
                 <StatCard label={market === 'ALL' ? '總資產' : `${market}持股市值`}
                   value={`NT$${fmt(s?.totalAsset ?? 0)}`}
@@ -214,6 +221,8 @@ export default function DashboardPage() {
                   change={s?.weekChange} changePct={s?.weekChangePct} />
                 <StatCard label="本月變動" value={fmtSigned(s?.monthChange ?? 0)}
                   change={s?.monthChange} changePct={s?.monthChangePct} />
+                <StatCard label="今年變動" value={fmtSigned(s?.yearChange ?? 0)}
+                  change={s?.yearChange} changePct={s?.yearChangePct} />
               </>
             )}
           </div>
