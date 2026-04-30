@@ -104,7 +104,7 @@ function SortHeader({
 }
 
 export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('value')
+  const [sortKey, setSortKey] = useState<SortKey>('dayChange')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [showConverted, setShowConverted] = useState(false)
 
