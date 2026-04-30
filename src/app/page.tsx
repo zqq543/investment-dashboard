@@ -83,9 +83,23 @@ function todayTrendValues(snapshots: DailySnapshot[], market: MarketFilter, curr
   return previous ? [previous[key], currentValue] : [currentValue]
 }
 
-function aggregateHoldingTrend(holdings: Holding[], market: MarketFilter, cash: number) {
+function aggregateHoldingTrend(
+  holdings: Holding[],
+  market: MarketFilter,
+  cash: number,
+  session: { twOpen: boolean; usOpen: boolean }
+) {
   const selected = market === 'ALL' ? holdings : holdings.filter(h => h.market === market)
+  const activeMarket = market === 'ALL'
+    ? session.usOpen && !session.twOpen
+      ? '美股'
+      : session.twOpen && !session.usOpen
+        ? '台股'
+        : 'ALL'
+    : market
+
   const withTrend = selected
+    .filter(h => activeMarket === 'ALL' || h.market === activeMarket)
     .map(h => {
       const raw = (h.trend ?? []).filter(v => Number.isFinite(v) && v > 0)
       const currentPrice = h.currentPrice ?? h.avgCost
@@ -105,6 +119,15 @@ function aggregateHoldingTrend(holdings: Holding[], market: MarketFilter, cash: 
 
   const pointCount = Math.max(...withTrend.map(item => item.values.length))
   const baseCash = market === 'ALL' ? cash : 0
+  const fixedValue = selected
+    .filter(h => activeMarket !== 'ALL' && h.market !== activeMarket)
+    .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
+  const noTrendValue = selected
+    .filter(h =>
+      (activeMarket === 'ALL' || h.market === activeMarket)
+      && (!h.trend || h.trend.length < 2)
+    )
+    .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
 
   return Array.from({ length: pointCount }, (_, index) => {
     const ratio = pointCount === 1 ? 1 : index / (pointCount - 1)
@@ -113,11 +136,7 @@ function aggregateHoldingTrend(holdings: Holding[], market: MarketFilter, cash: 
       return sum + item.values[valueIndex]
     }, 0)
 
-    const noTrendValue = selected
-      .filter(h => !h.trend || h.trend.length < 2)
-      .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
-
-    return baseCash + noTrendValue + stockValue
+    return baseCash + fixedValue + noTrendValue + stockValue
   })
 }
 
@@ -286,7 +305,7 @@ export default function DashboardPage() {
   const statTrends = useMemo(() => {
     const snapshots = data?.snapshots ?? []
     const currentValue = fSum?.totalAsset
-    const intraday = data ? aggregateHoldingTrend(fHoldings, market, fSum?.cash ?? 0) : []
+    const intraday = data ? aggregateHoldingTrend(fHoldings, market, fSum?.cash ?? 0, marketSession) : []
     const key = getSnapshotKey(market)
     const latestValid = [...snapshots]
       .sort((a, b) => b.date.localeCompare(a.date))
@@ -303,7 +322,7 @@ export default function DashboardPage() {
       month: periodTrendWithIntraday(snapshots, market, currentValue, 31, intraday),
       year: periodTrendWithIntraday(snapshots, market, currentValue, 366, intraday),
     }
-  }, [data, fHoldings, market, fSum?.cash, fSum?.totalAsset])
+  }, [data, fHoldings, market, fSum?.cash, fSum?.totalAsset, marketSession])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(var(--background))' }}>
