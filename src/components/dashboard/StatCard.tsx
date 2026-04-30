@@ -27,7 +27,7 @@ function PercentBadge({ pct, positive }: { pct?: number; positive: boolean }) {
 }
 
 function MiniTrend({ values, positive }: { values?: number[]; positive: boolean }) {
-  const pts = (values ?? []).filter(v => Number.isFinite(v) && v > 0)
+  const pts = (values ?? []).filter(v => Number.isFinite(v))
   if (pts.length < 2) return null
 
   const width = 56

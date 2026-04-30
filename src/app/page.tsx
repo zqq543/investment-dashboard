@@ -83,6 +83,66 @@ function todayTrendValues(snapshots: DailySnapshot[], market: MarketFilter, curr
   return previous ? [previous[key], currentValue] : [currentValue]
 }
 
+function aggregateHoldingTrend(holdings: Holding[], market: MarketFilter, cash: number) {
+  const selected = market === 'ALL' ? holdings : holdings.filter(h => h.market === market)
+  const withTrend = selected
+    .map(h => {
+      const raw = (h.trend ?? []).filter(v => Number.isFinite(v) && v > 0)
+      const currentPrice = h.currentPrice ?? h.avgCost
+      const currentLocalValue = currentPrice * h.shares
+      const fxRate = h.currency === 'USD' && currentLocalValue > 0
+        ? (h.currentValue ?? 0) / currentLocalValue
+        : 1
+
+      return {
+        values: raw.map(price => price * h.shares * fxRate),
+        current: h.currentValue ?? 0,
+      }
+    })
+    .filter(item => item.values.length >= 2)
+
+  if (!withTrend.length) return []
+
+  const pointCount = Math.max(...withTrend.map(item => item.values.length))
+  const baseCash = market === 'ALL' ? cash : 0
+
+  return Array.from({ length: pointCount }, (_, index) => {
+    const ratio = pointCount === 1 ? 1 : index / (pointCount - 1)
+    const stockValue = withTrend.reduce((sum, item) => {
+      const valueIndex = Math.min(item.values.length - 1, Math.round(ratio * (item.values.length - 1)))
+      return sum + item.values[valueIndex]
+    }, 0)
+
+    const noTrendValue = selected
+      .filter(h => !h.trend || h.trend.length < 2)
+      .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
+
+    return baseCash + noTrendValue + stockValue
+  })
+}
+
+function changeTrendFromBase(values: number[], base?: number) {
+  if (!base || base <= 0 || values.length < 2) return values
+  return values.map(v => v - base)
+}
+
+function periodTrendWithIntraday(
+  snapshots: DailySnapshot[],
+  market: MarketFilter,
+  currentValue: number | undefined,
+  days: number,
+  intraday: number[]
+) {
+  const historical = trendValues(snapshots, market, currentValue, days)
+  if (intraday.length < 2) return historical
+
+  const withoutCurrent = currentValue !== undefined && historical.length > 0 && historical.at(-1) === currentValue
+    ? historical.slice(0, -1)
+    : historical
+
+  return [...withoutCurrent, ...intraday]
+}
+
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
   const marketDate = getSnapshotReportDate(key)
   const latestValid = [...snapshots]
@@ -226,14 +286,24 @@ export default function DashboardPage() {
   const statTrends = useMemo(() => {
     const snapshots = data?.snapshots ?? []
     const currentValue = fSum?.totalAsset
+    const intraday = data ? aggregateHoldingTrend(fHoldings, market, fSum?.cash ?? 0) : []
+    const key = getSnapshotKey(market)
+    const latestValid = [...snapshots]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .find(s => s.date <= getSnapshotReportDate(key) && s[key] > 0)
+    const reportDate = key === 'twStockValue' ? (latestValid?.date ?? getSnapshotReportDate(key)) : getSnapshotReportDate(key)
+    const previous = [...snapshots]
+      .filter(s => s.date < reportDate && s[key] > 0)
+      .sort((a, b) => b.date.localeCompare(a.date))[0]
+
     return {
-      all: trendValues(snapshots, market, currentValue),
-      today: todayTrendValues(snapshots, market, currentValue),
-      week: trendValues(snapshots, market, currentValue, 7),
-      month: trendValues(snapshots, market, currentValue, 31),
-      year: trendValues(snapshots, market, currentValue, 366),
+      all: intraday.length >= 2 ? intraday : trendValues(snapshots, market, currentValue),
+      today: intraday.length >= 2 ? changeTrendFromBase(intraday, previous?.[key]) : todayTrendValues(snapshots, market, currentValue),
+      week: periodTrendWithIntraday(snapshots, market, currentValue, 7, intraday),
+      month: periodTrendWithIntraday(snapshots, market, currentValue, 31, intraday),
+      year: periodTrendWithIntraday(snapshots, market, currentValue, 366, intraday),
     }
-  }, [data, market, fSum?.totalAsset])
+  }, [data, fHoldings, market, fSum?.cash, fSum?.totalAsset])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(var(--background))' }}>
