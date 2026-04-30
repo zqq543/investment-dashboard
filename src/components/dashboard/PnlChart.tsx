@@ -63,19 +63,18 @@ function StatBadge({
   down?: number
 }) {
   const pos = value >= 0
+  const moveLabel = up !== undefined && down !== undefined ? `漲${up} 跌${down}` : undefined
   return (
-    <div className="flex flex-col items-center gap-0.5 min-w-[4.75rem]">
-      {range && <span className="text-[9px] text-muted-foreground tabular-nums">{range}</span>}
-      {up !== undefined && down !== undefined && (
-        <span className="text-[9px] text-muted-foreground">
-          漲<span className="text-positive tabular-nums mx-0.5">{up}</span>
-          跌<span className="text-negative tabular-nums mx-0.5">{down}</span>
-        </span>
-      )}
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <span className={cn('text-xs font-semibold tabular-nums', pos ? 'text-positive' : 'text-negative')}>
+    <div className="min-w-0 text-right sm:text-center">
+      <div className="h-4 text-[10px] text-muted-foreground tabular-nums leading-none">
+        {range ?? ''}
+      </div>
+      <div className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
+        {label}{moveLabel ? ` (${moveLabel})` : ''}
+      </div>
+      <div className={cn('mt-1 text-sm font-semibold tabular-nums whitespace-nowrap', pos ? 'text-positive' : 'text-negative')}>
         {fmtNT(value)}{fmtPct(pct)}
-      </span>
+      </div>
     </div>
   )
 }
@@ -88,15 +87,15 @@ export function PnlChart({ stats, market }: PnlChartProps) {
   const yearRange = fmtRange(stats.yearStart, stats.yearEnd)
 
   return (
-    <div className="card p-4 sm:p-5">
-      <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+    <div className="card p-3 sm:p-4">
+      <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">
             每日損益
           </p>
           <p className="text-sm font-medium mt-1">{marketLabel}</p>
         </div>
-        <div className="flex items-start gap-4 sm:gap-5 flex-wrap">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 w-full sm:w-auto">
           <StatBadge label="今日" value={stats.today} />
           <StatBadge
             label="本月累計"
@@ -118,12 +117,12 @@ export function PnlChart({ stats, market }: PnlChartProps) {
       </div>
 
       {data.length < 2 ? (
-        <div className="flex items-center justify-center h-44 text-muted-foreground text-sm">
+        <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
           累積 2 筆快照後顯示
         </div>
       ) : (
         <div className="w-full overflow-hidden">
-          <ResponsiveContainer width="100%" height={190}>
+          <ResponsiveContainer width="100%" height={140}>
             <BarChart data={data} margin={{ top: 4, right: 2, left: 0, bottom: 0 }} barSize={Math.max(2, Math.floor(600 / data.length) - 2)}>
               <XAxis
                 dataKey="date"

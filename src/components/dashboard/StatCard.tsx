@@ -10,9 +10,10 @@ interface StatCardProps {
   changePct?: number
   highlight?: boolean
   lastUpdated?: string  // 顯示於今日變動旁
+  className?: string
 }
 
-export function StatCard({ label, value, subValue, change, changePct, highlight = false, lastUpdated }: StatCardProps) {
+export function StatCard({ label, value, subValue, change, changePct, highlight = false, lastUpdated, className }: StatCardProps) {
   const isPos    = (change ?? 0) >= 0
   const isZero   = change === 0 || change === undefined
   const hasChange = change !== undefined
@@ -20,7 +21,8 @@ export function StatCard({ label, value, subValue, change, changePct, highlight 
   return (
     <div className={cn(
       'card p-4 sm:p-5 flex flex-col gap-1.5 min-w-0 transition-shadow hover:shadow-md',
-      highlight && 'ring-1 ring-accent/20 bg-gradient-to-br from-card to-accent/5'
+      highlight && 'ring-1 ring-accent/20 bg-gradient-to-br from-card to-accent/5',
+      className
     )}>
       <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase truncate">
         {label}
@@ -28,7 +30,7 @@ export function StatCard({ label, value, subValue, change, changePct, highlight 
 
       <div className={cn(
         'tabular-nums font-semibold leading-tight whitespace-nowrap',
-        highlight ? 'text-[clamp(1.85rem,3.2vw,2.55rem)] font-bold' : 'text-xl sm:text-2xl',
+        highlight ? 'text-[clamp(1.85rem,3vw,2.7rem)] font-bold' : 'text-xl sm:text-2xl',
         hasChange && !isZero ? (isPos ? 'text-positive' : 'text-negative') : ''
       )}>
         {value}
