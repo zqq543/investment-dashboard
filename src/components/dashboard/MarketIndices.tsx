@@ -37,7 +37,7 @@ function IndexItem({ idx }: { idx: IndexQuote }) {
   )
 }
 
-function IndexRows({ indices, market }: { indices: IndexQuote[]; market: MarketFilter }) {
+function IndexRows({ indices }: { indices: IndexQuote[] }) {
   const allStale = indices.every(i => i.isStale)
 
   // 依 row 分組
@@ -51,9 +51,9 @@ function IndexRows({ indices, market }: { indices: IndexQuote[]; market: MarketF
   const rowKeys = Array.from(byRow.keys()).sort()
 
   return (
-    <div className="flex flex-col gap-1.5 items-end">
+    <div className="flex flex-col gap-1.5 items-start">
       {rowKeys.map(r => (
-        <div key={r} className="flex items-center gap-3 flex-wrap justify-end">
+        <div key={r} className="flex items-center gap-3 flex-wrap justify-start">
           {byRow.get(r)!.map(idx => <IndexItem key={idx.symbol} idx={idx} />)}
         </div>
       ))}
@@ -88,7 +88,7 @@ export function MarketIndices({ market }: { market: MarketFilter }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-1.5 items-end">
+      <div className="flex flex-col gap-1.5 items-start">
         {[1, 2].map(r => (
           <div key={r} className="flex gap-3">
             {[1, 2, 3].map(i => (
@@ -105,5 +105,5 @@ export function MarketIndices({ market }: { market: MarketFilter }) {
 
   if (!indices.length) return <span className="text-xs text-muted-foreground">載入中...</span>
 
-  return <IndexRows indices={indices} market={market} />
+  return <IndexRows indices={indices} />
 }

@@ -87,12 +87,14 @@ export function buildPortfolioSummary(
   const totalAsset    = cash + stockValue
   const unrealizedPnl = holdings.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
 
+  const validSnapshots = snapshots.filter(s => s.totalAsset > 0)
+
   // 最新快照（作為「最近一天」的基準）
-  const latestSnap = snapshots[0]
+  const latestSnap = validSnapshots[0]
 
   // ── 今日變動：最新快照 vs 前一天快照 ────────────────
   // 若只有一筆快照，today change = 0
-  const prevDaySnap  = snapshots[1]  // 降序第二筆 = 前一天
+  const prevDaySnap  = validSnapshots[1]  // 降序第二筆 = 前一天
   const todayChange  = latestSnap && prevDaySnap
     ? latestSnap.totalAsset - prevDaySnap.totalAsset
     : 0
@@ -103,7 +105,7 @@ export function buildPortfolioSummary(
   const weekAgo    = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
   const weekAgoStr = weekAgo.toISOString().split('T')[0]
-  const weekSnap   = snapshots.find(s => s.date <= weekAgoStr)
+  const weekSnap   = validSnapshots.find(s => s.date <= weekAgoStr)
   const weekChange = latestSnap && weekSnap
     ? latestSnap.totalAsset - weekSnap.totalAsset
     : 0
@@ -113,7 +115,7 @@ export function buildPortfolioSummary(
   // ── 本月變動：最新快照 vs 月初前的快照 ──────────────
   const now        = new Date()
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-  const monthSnap  = snapshots.find(s => s.date < monthStart)
+  const monthSnap  = validSnapshots.find(s => s.date < monthStart)
   const monthChange = latestSnap && monthSnap
     ? latestSnap.totalAsset - monthSnap.totalAsset
     : 0

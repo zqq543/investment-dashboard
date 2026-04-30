@@ -8,12 +8,13 @@ export const dynamic = 'force-dynamic'
 interface IndexDef {
   symbol: string; name: string; market: Market
   currency: 'TWD' | 'USD'; row: number; mock?: boolean; twse?: boolean
+  fallbackPrice?: number
 }
 
 const TW_INDICES: IndexDef[] = [
-  { symbol: '__TWRIX__', name: '加權報酬指數', market: '台股', currency: 'TWD', row: 0, twse: true },
-  { symbol: '^TWII',     name: '加權指數',     market: '台股', currency: 'TWD', row: 0 },
-  { symbol: '__TX__',    name: '台指期(TX)*',  market: '台股', currency: 'TWD', row: 0, mock: true },
+  { symbol: '__TWRIX__', name: '發行量加權股價報酬指數', market: '台股', currency: 'TWD', row: 0, twse: true, fallbackPrice: 90377.55 },
+  { symbol: '^TWII',     name: '加權指數',               market: '台股', currency: 'TWD', row: 0 },
+  { symbol: '__TX__',    name: '台指期(TX)*',            market: '台股', currency: 'TWD', row: 0, mock: true },
 ]
 
 const GLOBAL_INDICES: IndexDef[] = [
@@ -108,6 +109,13 @@ export async function GET(req: Request) {
         let data = await fetchTWSEReturnIndex()
         // fallback：^TWRIX Yahoo
         if (!data) data = await fetchYahoo('^TWRIX')
+        if (!data && idx.fallbackPrice) {
+          return {
+            symbol: idx.symbol, name: idx.name, price: idx.fallbackPrice,
+            change: 0, changePct: 0, market: idx.market, currency: idx.currency,
+            isStale: true, row: idx.row,
+          }
+        }
         if (!data) return null
         const change    = data.prevClose > 0 ? data.price - data.prevClose : 0
         const changePct = data.prevClose > 0 ? (change / data.prevClose) * 100 : 0

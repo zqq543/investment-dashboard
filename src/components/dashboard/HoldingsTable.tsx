@@ -9,6 +9,15 @@ interface HoldingsTableProps {
   marketFilter?: MarketFilter
 }
 
+function formatMoney(amount: number, currency: 'USD' | 'TWD', fractionDigits?: number) {
+  const digits = fractionDigits ?? (currency === 'USD' ? 2 : 0)
+  const prefix = currency === 'USD' ? 'US$' : 'NT$'
+  return `${prefix}${Math.abs(amount).toLocaleString(currency === 'USD' ? 'en-US' : 'zh-TW', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`
+}
+
 function PriceSourceBadge({ source }: { source?: string }) {
   if (!source) return null
   const map: Record<string, { label: string; cls: string }> = {
@@ -24,9 +33,19 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
   const subtotal = useMemo(() => ({
     value: holdings.reduce((s, h) => s + (h.currentValue ?? 0), 0),
     pnl:   holdings.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0),
+    usdValue: holdings
+      .filter(h => h.currency === 'USD')
+      .reduce((s, h) => s + ((h.currentPrice ?? h.avgCost) * h.shares), 0),
+    usdPnl: holdings
+      .filter(h => h.currency === 'USD')
+      .reduce((s, h) => s + (((h.currentPrice ?? h.avgCost) - h.avgCost) * h.shares), 0),
   }), [holdings])
 
-  const pnlPos = subtotal.pnl >= 0
+  const showUsdSubtotal = marketFilter === '美股'
+  const subtotalValue = showUsdSubtotal ? subtotal.usdValue : subtotal.value
+  const subtotalPnl = showUsdSubtotal ? subtotal.usdPnl : subtotal.pnl
+  const subtotalCurrency = showUsdSubtotal ? 'USD' : 'TWD'
+  const pnlPos = subtotalPnl >= 0
   const title  = marketFilter === 'ALL' ? '持股清單' : `${marketFilter} 持股`
 
   if (holdings.length === 0) {
@@ -48,12 +67,20 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
         </p>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>市值 <span className="text-foreground font-medium tabular-nums">
-            NT${subtotal.value.toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
+            {formatMoney(subtotalValue, subtotalCurrency)}
           </span></span>
-          <span>損益 <span className={cn('font-medium tabular-nums flex items-center gap-0.5 inline-flex', pnlPos ? 'text-positive' : 'text-negative')}>
-            <span className={pnlPos ? 'arrow-up' : 'arrow-down'}>{pnlPos ? '▲' : '▼'}</span>
-            NT${Math.abs(subtotal.pnl).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
-          </span></span>
+          <span className="flex items-center gap-1">
+            損益
+            <span className={cn('font-medium tabular-nums flex items-center gap-0.5 inline-flex', pnlPos ? 'text-positive' : 'text-negative')}>
+              <span className={pnlPos ? 'arrow-up' : 'arrow-down'}>{pnlPos ? '▲' : '▼'}</span>
+              {formatMoney(subtotalPnl, subtotalCurrency)}
+            </span>
+            {showUsdSubtotal && (
+              <span className={cn('text-[11px] tabular-nums', subtotal.pnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
+                約{subtotal.pnl >= 0 ? '+' : '-'}{formatMoney(subtotal.pnl, 'TWD')}
+              </span>
+            )}
+          </span>
         </div>
       </div>
 
@@ -75,6 +102,12 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               const pnlPct = h.unrealizedPnlPct ?? 0
               const isPos  = pnl >= 0
               const cur    = h.currentPrice ?? h.avgCost
+              const isUS    = h.currency === 'USD'
+              const localValue = cur * h.shares
+              const localPnl = (cur - h.avgCost) * h.shares
+              const displayValue = isUS ? localValue : (h.currentValue ?? 0)
+              const displayPnl = isUS ? localPnl : pnl
+              const displayPnlPos = displayPnl >= 0
               const dayPct = h.avgCost > 0 ? ((cur - h.avgCost) / h.avgCost) * 100 : 0
               const dayPos = dayPct >= 0
 
@@ -99,13 +132,13 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums hidden sm:table-cell">{h.shares.toLocaleString()}</td>
                   <td className="py-3.5 px-3 text-right tabular-nums text-muted-foreground hidden md:table-cell">
-                    {h.currency === 'USD' ? '$' : 'NT$'}{h.avgCost.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatMoney(h.avgCost, h.currency, 2)}
                   </td>
                   <td className="py-3.5 px-3 text-right">
                     <div className="flex flex-col items-end gap-0.5">
                       <div className="flex items-center gap-1">
                         <span className="tabular-nums font-medium">
-                          {h.currency === 'USD' ? '$' : 'NT$'}{cur.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {formatMoney(cur, h.currency, 2)}
                         </span>
                         <PriceSourceBadge source={h.priceSource} />
                       </div>
@@ -116,16 +149,21 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                     </div>
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums font-medium hidden sm:table-cell">
-                    NT${(h.currentValue ?? 0).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
+                    {formatMoney(displayValue, h.currency)}
                   </td>
                   <td className="py-3.5 px-3 text-right">
-                    <div className={cn('tabular-nums font-medium flex items-center justify-end gap-0.5', isPos ? 'text-positive' : 'text-negative')}>
-                      <span className={isPos ? 'arrow-up' : 'arrow-down'}>{isPos ? '▲' : '▼'}</span>
-                      NT${Math.abs(pnl).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
+                    <div className={cn('tabular-nums font-medium flex items-center justify-end gap-0.5', displayPnlPos ? 'text-positive' : 'text-negative')}>
+                      <span className={displayPnlPos ? 'arrow-up' : 'arrow-down'}>{displayPnlPos ? '▲' : '▼'}</span>
+                      {formatMoney(displayPnl, h.currency)}
                     </div>
-                    <div className={cn('text-xs text-right', isPos ? 'text-positive' : 'text-negative')}>
-                      {isPos ? '+' : ''}{pnlPct.toFixed(2)}%
+                    <div className={cn('text-xs text-right', displayPnlPos ? 'text-positive' : 'text-negative')}>
+                      {displayPnlPos ? '+' : ''}{pnlPct.toFixed(2)}%
                     </div>
+                    {isUS && (
+                      <div className={cn('text-[11px] text-right tabular-nums', isPos ? 'text-positive/80' : 'text-negative/80')}>
+                        約{pnl >= 0 ? '+' : '-'}{formatMoney(pnl, 'TWD')}
+                      </div>
+                    )}
                   </td>
                 </tr>
               )

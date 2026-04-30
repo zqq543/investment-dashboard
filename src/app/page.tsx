@@ -28,15 +28,61 @@ interface DashboardData {
 function fmt(n: number) { return n.toLocaleString('zh-TW', { maximumFractionDigits: 0 }) }
 function fmtSigned(n: number) { return `${n >= 0 ? '+' : ''}NT$${fmt(Math.abs(n))}` }
 
-function filterSummary(holdings: Holding[], market: MarketFilter, base: PortfolioSummary): PortfolioSummary {
-  if (market === 'ALL') return base
+type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
+
+function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey) {
+  const ordered = [...snapshots]
+    .filter(s => typeof s[key] === 'number' && s[key] > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  const latest = ordered[0]
+  const previous = ordered[1]
+
+  const calc = (base?: DailySnapshot) => {
+    const change = latest && base ? latest[key] - base[key] : 0
+    const pct = base && base[key] > 0 ? (change / base[key]) * 100 : 0
+    return { change, pct }
+  }
+
+  const latestDate = latest?.date ? new Date(`${latest.date}T00:00:00`) : new Date()
+  const weekAgo = new Date(latestDate)
+  weekAgo.setDate(weekAgo.getDate() - 7)
+  const weekAgoStr = weekAgo.toISOString().slice(0, 10)
+  const weekBase = ordered.find(s => s.date <= weekAgoStr)
+
+  const monthStart = `${latestDate.getFullYear()}-${String(latestDate.getMonth() + 1).padStart(2, '0')}-01`
+  const monthBase = ordered.find(s => s.date < monthStart)
+
+  const today = calc(previous)
+  const week = calc(weekBase)
+  const month = calc(monthBase)
+
+  return {
+    todayChange: today.change,
+    todayChangePct: today.pct,
+    weekChange: week.change,
+    weekChangePct: week.pct,
+    monthChange: month.change,
+    monthChangePct: month.pct,
+  }
+}
+
+function filterSummary(
+  holdings: Holding[],
+  market: MarketFilter,
+  base: PortfolioSummary,
+  snapshots: DailySnapshot[]
+): PortfolioSummary {
+  if (market === 'ALL') {
+    return { ...base, ...snapshotChanges(snapshots, 'totalAsset') }
+  }
   const filt  = holdings.filter(h => h.market === market)
   const sv    = filt.reduce((s, h) => s + (h.currentValue ?? 0), 0)
   const upnl  = filt.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
-  const ratio = base.stockValue > 0 ? sv / base.stockValue : 0
+  const changes = snapshotChanges(snapshots, market === '台股' ? 'twStockValue' : 'usStockValue')
   return { ...base, totalAsset: sv, stockValue: sv, unrealizedPnl: upnl, cash: 0,
     twStockValue: market === '台股' ? sv : 0, usStockValue: market === '美股' ? sv : 0,
-    todayChange: base.todayChange * ratio, weekChange: base.weekChange * ratio, monthChange: base.monthChange * ratio }
+    ...changes }
 }
 
 export default function DashboardPage() {
@@ -72,7 +118,7 @@ export default function DashboardPage() {
     if (market === 'ALL') return data.distribution
     return { cash: 0, stocks: data.distribution.stocks.filter(s => s.market === market) }
   }, [data, market])
-  const fSum   = useMemo(() => !data ? null : filterSummary(data.holdings, market, data.summary), [data, market])
+  const fSum   = useMemo(() => !data ? null : filterSummary(data.holdings, market, data.summary, data.snapshots), [data, market])
   const counts = useMemo(() => ({
     ALL: data?.holdings.length ?? 0,
     台股: data?.holdings.filter(h => h.market === '台股').length ?? 0,
@@ -99,9 +145,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Tab 列 + 指數（同一行：Tab 左、指數右） */}
+        {/* Tab 列 + 指數（同一行：指數緊接在 Tab 右側） */}
         <div className="border-b border-border pb-3">
-          <div className="flex items-start gap-3 justify-between">
+          <div className="flex flex-col lg:flex-row lg:items-start gap-3 lg:gap-5">
             {/* 左：Tab 按鈕 + 統計 */}
             <div className="flex flex-col gap-1.5 flex-shrink-0">
               <div className="flex items-center gap-1">
@@ -128,7 +174,7 @@ export default function DashboardPage() {
             </div>
             {/* 右：指數行情 */}
             {!loading && (
-              <div className="flex-1 min-w-0 flex justify-end">
+              <div className="min-w-0 lg:flex-1 lg:max-w-4xl">
                 <MarketIndices market={market} />
               </div>
             )}
