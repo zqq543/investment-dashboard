@@ -8,15 +8,43 @@ interface StatCardProps {
   subValue?: string
   change?: number
   changePct?: number
+  trend?: number[]
   highlight?: boolean
   lastUpdated?: string  // 顯示於今日變動旁
   className?: string
 }
 
-export function StatCard({ label, value, subValue, change, changePct, highlight = false, lastUpdated, className }: StatCardProps) {
+function MiniTrend({ values, positive }: { values?: number[]; positive: boolean }) {
+  const pts = (values ?? []).filter(v => Number.isFinite(v) && v > 0)
+  if (pts.length < 2) return null
+
+  const width = 92
+  const height = 34
+  const min = Math.min(...pts)
+  const max = Math.max(...pts)
+  const span = max - min || 1
+  const d = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * width
+    const y = height - ((v - min) / span) * (height - 4) - 2
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className={positive ? 'text-positive h-8 w-20 sm:w-24' : 'text-negative h-8 w-20 sm:w-24'}
+      aria-hidden="true"
+    >
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function StatCard({ label, value, subValue, change, changePct, trend, highlight = false, lastUpdated, className }: StatCardProps) {
   const isPos    = (change ?? 0) >= 0
   const isZero   = change === 0 || change === undefined
   const hasChange = change !== undefined
+  const trendPositive = trend && trend.length >= 2 ? trend[trend.length - 1] >= trend[0] : isPos
 
   return (
     <div className={cn(
@@ -28,12 +56,17 @@ export function StatCard({ label, value, subValue, change, changePct, highlight 
         {label}
       </span>
 
-      <div className={cn(
-        'tabular-nums font-semibold leading-tight whitespace-nowrap',
-        highlight ? 'text-2xl sm:text-3xl font-bold' : 'text-xl sm:text-2xl',
-        hasChange && !isZero ? (isPos ? 'text-positive' : 'text-negative') : ''
-      )}>
-        {value}
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <div className={cn(
+          'tabular-nums font-semibold leading-tight whitespace-nowrap min-w-0',
+          highlight ? 'text-2xl sm:text-3xl font-bold' : 'text-xl sm:text-2xl',
+          hasChange && !isZero ? (isPos ? 'text-positive' : 'text-negative') : ''
+        )}>
+          {value}
+        </div>
+        <div className="hidden sm:block flex-shrink-0 pt-0.5">
+          <MiniTrend values={trend} positive={trendPositive} />
+        </div>
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap min-h-[1.1rem]">

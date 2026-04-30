@@ -56,6 +56,16 @@ function latestSnapshotDateForMarket(snapshots: DailySnapshot[], market: MarketF
   return latestValid?.date
 }
 
+function trendValues(snapshots: DailySnapshot[], market: MarketFilter, days?: number) {
+  const key = getSnapshotKey(market)
+  const marketDate = getSnapshotReportDate(key)
+  const cutoff = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : undefined
+  return [...snapshots]
+    .filter(s => s.date <= marketDate && (!cutoff || s.date >= cutoff) && s[key] > 0)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(s => s[key])
+}
+
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
   const marketDate = getSnapshotReportDate(key)
   const latestValid = [...snapshots]
@@ -196,6 +206,15 @@ export default function DashboardPage() {
     () => data ? latestSnapshotDateForMarket(data.snapshots, market) : undefined,
     [data, market]
   )
+  const statTrends = useMemo(() => {
+    const snapshots = data?.snapshots ?? []
+    return {
+      all: trendValues(snapshots, market),
+      week: trendValues(snapshots, market, 7),
+      month: trendValues(snapshots, market, 31),
+      year: trendValues(snapshots, market, 366),
+    }
+  }, [data, market])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(var(--background))' }}>
@@ -267,17 +286,22 @@ export default function DashboardPage() {
                 <StatCard label={market === 'ALL' ? '總資產' : `${market}持股市值`}
                   value={`NT$${fmt(s?.totalAsset ?? 0)}`}
                   subValue={`未實現 ${(s?.unrealizedPnl ?? 0) >= 0 ? '+' : ''}NT$${fmt(Math.abs(s?.unrealizedPnl ?? 0))}`}
+                  trend={statTrends.all}
                   highlight
                   className="col-span-2" />
                 <StatCard label="今日變動" value={fmtSigned(s?.todayChange ?? 0)}
                   change={s?.todayChange} changePct={s?.todayChangePct}
+                  trend={statTrends.week}
                   lastUpdated={latestSnapDate} />
                 <StatCard label="本週變動" value={fmtSigned(s?.weekChange ?? 0)}
-                  change={s?.weekChange} changePct={s?.weekChangePct} />
+                  change={s?.weekChange} changePct={s?.weekChangePct}
+                  trend={statTrends.week} />
                 <StatCard label="本月變動" value={fmtSigned(s?.monthChange ?? 0)}
-                  change={s?.monthChange} changePct={s?.monthChangePct} />
+                  change={s?.monthChange} changePct={s?.monthChangePct}
+                  trend={statTrends.month} />
                 <StatCard label="今年變動" value={fmtSigned(s?.yearChange ?? 0)}
-                  change={s?.yearChange} changePct={s?.yearChangePct} />
+                  change={s?.yearChange} changePct={s?.yearChangePct}
+                  trend={statTrends.year} />
               </>
             )}
           </div>
