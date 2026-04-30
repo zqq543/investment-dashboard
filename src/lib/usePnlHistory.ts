@@ -98,7 +98,7 @@ export function usePnlHistory(
       .map(([date, pnl]) => ({ date, pnl }))
       .sort((a, b) => a.date.localeCompare(b.date)))
 
-    const reportDate = marketDate
+    const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
     const previous = sorted.filter(s => s.date < reportDate).at(-1)
     if (currentValue !== undefined && previous) {
       merged.set(reportDate, currentValue - previous[key])

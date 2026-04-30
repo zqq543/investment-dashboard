@@ -90,7 +90,7 @@ function calcChangesFromCurrent(
     .filter(s => s.date <= marketDate && s[key] > 0 && (!needsUsBreakdown || s.usStockValue > 0))
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  const reportDate = marketDate
+  const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
 
   const calc = (base?: DailySnapshot) => {
     const change = base ? currentValue - base[key] : 0

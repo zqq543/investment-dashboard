@@ -31,12 +31,28 @@ function fmtSigned(n: number) { return `${n >= 0 ? '+' : ''}NT$${fmt(Math.abs(n)
 
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
+function getSnapshotKey(market: MarketFilter): SnapshotValueKey {
+  if (market === '台股') return 'twStockValue'
+  if (market === '美股') return 'usStockValue'
+  return 'totalAsset'
+}
+
 function getWeekStart(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   const day = d.getDay()
   const diff = d.getDate() - day + (day === 0 ? -6 : 1)
   d.setDate(diff)
   return d.toISOString().slice(0, 10)
+}
+
+function latestSnapshotDateForMarket(snapshots: DailySnapshot[], market: MarketFilter) {
+  const key = getSnapshotKey(market)
+  const marketDate = getSnapshotReportDate(key)
+  const latestValid = [...snapshots]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .find(s => s.date <= marketDate && typeof s[key] === 'number' && s[key] > 0)
+
+  return latestValid?.date
 }
 
 function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
@@ -56,7 +72,7 @@ function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, curr
     )
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  const reportDate = marketDate
+  const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
   const previous = ordered.find(s => s.date < reportDate)
 
   const calc = (base?: DailySnapshot) => {
@@ -157,7 +173,10 @@ export default function DashboardPage() {
   const pnlStats = usePnlHistory(data?.snapshots ?? [], market, fSum?.totalAsset)
 
   const s            = fSum
-  const latestSnapDate = data?.snapshots?.at(-1)?.date
+  const latestSnapDate = useMemo(
+    () => data ? latestSnapshotDateForMarket(data.snapshots, market) : undefined,
+    [data, market]
+  )
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(var(--background))' }}>
