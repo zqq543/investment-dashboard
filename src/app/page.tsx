@@ -28,7 +28,7 @@ interface DashboardData {
 }
 
 function fmt(n: number) { return n.toLocaleString('zh-TW', { maximumFractionDigits: 0 }) }
-function fmtSigned(n: number) { return `${n >= 0 ? '+' : ''}NT$${fmt(Math.abs(n))}` }
+function fmtSigned(n: number) { return `${n >= 0 ? '+' : '-'}NT$${fmt(Math.abs(n))}` }
 
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
