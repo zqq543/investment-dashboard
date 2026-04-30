@@ -14,6 +14,18 @@ interface StatCardProps {
   className?: string
 }
 
+function PercentBadge({ pct, positive }: { pct?: number; positive: boolean }) {
+  if (pct === undefined) return null
+  return (
+    <span className={cn(
+      'inline-flex min-w-[3.9rem] items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white',
+      positive ? 'bg-positive' : 'bg-negative'
+    )}>
+      {positive ? '+' : ''}{pct.toFixed(2)}%
+    </span>
+  )
+}
+
 function MiniTrend({ values, positive }: { values?: number[]; positive: boolean }) {
   const pts = (values ?? []).filter(v => Number.isFinite(v) && v > 0)
   if (pts.length < 2) return null
@@ -52,7 +64,7 @@ export function StatCard({ label, value, subValue, change, changePct, trend, hig
       highlight && 'ring-1 ring-accent/20 bg-gradient-to-br from-card to-accent/5',
       className
     )}>
-      <div className="flex items-center justify-between gap-2 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
         <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase truncate">
           {label}
         </span>
@@ -77,9 +89,7 @@ export function StatCard({ label, value, subValue, change, changePct, trend, hig
           )}>
             <span className={isPos ? 'arrow-up' : 'arrow-down'}>{isPos ? '▲' : '▼'}</span>
             {Math.abs(change!).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}
-            {changePct !== undefined && (
-              <span className="opacity-75 ml-0.5">({isPos ? '+' : ''}{changePct.toFixed(2)}%)</span>
-            )}
+            <PercentBadge pct={changePct} positive={isPos} />
           </span>
         )}
         {isZero && hasChange && <span className="text-xs text-muted-foreground">—</span>}

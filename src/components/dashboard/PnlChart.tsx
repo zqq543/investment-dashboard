@@ -65,8 +65,8 @@ function StatBadge({
   const pos = value >= 0
   const moveLabel = up !== undefined && down !== undefined ? `漲${up} 跌${down}` : undefined
   return (
-    <div className="min-w-0 rounded-lg bg-muted/45 px-3 py-2 text-left">
-      <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+    <div className="min-w-0 rounded-lg bg-muted/45 px-2.5 py-2 text-left">
+      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground whitespace-nowrap">
         <span>{label}</span>
         {range && <span className="tabular-nums">{range}</span>}
       </div>
@@ -98,7 +98,7 @@ export function PnlChart({ stats, market }: PnlChartProps) {
           </p>
           <p className="text-sm font-medium mt-1">{marketLabel}</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[46rem]">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
           <StatBadge label="今日" value={stats.today} />
           <StatBadge
             label="本月累計"
