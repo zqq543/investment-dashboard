@@ -132,6 +132,64 @@ function aggregateHoldingTrend(
   session: { twOpen: boolean; usOpen: boolean }
 ) {
   const selected = market === 'ALL' ? holdings : holdings.filter(h => h.market === market)
+  const valueOf = (items: Holding[]) => items.reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
+  const trendValueOf = (h: Holding) => {
+    const raw = (h.trend ?? []).filter(v => Number.isFinite(v) && v > 0)
+    const currentPrice = h.currentPrice ?? h.avgCost
+    const currentLocalValue = currentPrice * h.shares
+    const fxRate = h.currency === 'USD' && currentLocalValue > 0
+      ? (h.currentValue ?? 0) / currentLocalValue
+      : 1
+
+    return raw.map(price => price * h.shares * fxRate)
+  }
+  const aggregateMarket = (items: Holding[]) => {
+    const withTrend = items
+      .map(h => ({ values: trendValueOf(h) }))
+      .filter(item => item.values.length >= 2)
+    if (!withTrend.length) return []
+
+    const pointCount = Math.max(...withTrend.map(item => item.values.length))
+    const noTrendValue = items
+      .filter(h => !h.trend || h.trend.length < 2)
+      .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
+
+    return Array.from({ length: pointCount }, (_, index) => {
+      const ratio = pointCount === 1 ? 1 : index / (pointCount - 1)
+      const stockValue = withTrend.reduce((sum, item) => {
+        const valueIndex = Math.min(item.values.length - 1, Math.round(ratio * (item.values.length - 1)))
+        return sum + item.values[valueIndex]
+      }, 0)
+      return noTrendValue + stockValue
+    })
+  }
+
+  if (market === 'ALL') {
+    const twHoldings = selected.filter(h => h.market === '台股')
+    const usHoldings = selected.filter(h => h.market === '美股')
+    const twTrend = aggregateMarket(twHoldings)
+    const usTrend = aggregateMarket(usHoldings)
+    const twFixed = valueOf(twHoldings)
+    const usFixed = valueOf(usHoldings)
+
+    if (session.twOpen && !session.usOpen) {
+      return twTrend.map(v => cash + v + usFixed)
+    }
+    if (session.usOpen && !session.twOpen) {
+      return usTrend.map(v => cash + twFixed + v)
+    }
+
+    if (twTrend.length >= 2 && usTrend.length >= 2) {
+      const twSegment = twTrend.map(v => cash + v + usTrend[0])
+      const usSegment = usTrend.map(v => cash + twFixed + v)
+      return [...twSegment, ...usSegment.slice(1)]
+    }
+
+    if (twTrend.length >= 2) return twTrend.map(v => cash + v + usFixed)
+    if (usTrend.length >= 2) return usTrend.map(v => cash + twFixed + v)
+    return []
+  }
+
   const activeMarket = market === 'ALL'
     ? session.usOpen && !session.twOpen
       ? '美股'
@@ -143,15 +201,8 @@ function aggregateHoldingTrend(
   const withTrend = selected
     .filter(h => activeMarket === 'ALL' || h.market === activeMarket)
     .map(h => {
-      const raw = (h.trend ?? []).filter(v => Number.isFinite(v) && v > 0)
-      const currentPrice = h.currentPrice ?? h.avgCost
-      const currentLocalValue = currentPrice * h.shares
-      const fxRate = h.currency === 'USD' && currentLocalValue > 0
-        ? (h.currentValue ?? 0) / currentLocalValue
-        : 1
-
       return {
-        values: raw.map(price => price * h.shares * fxRate),
+        values: trendValueOf(h),
         current: h.currentValue ?? 0,
       }
     })
