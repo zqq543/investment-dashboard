@@ -71,8 +71,17 @@ function getEffectiveReportDate(
   marketOpen: boolean
 ) {
   const marketDate = getSnapshotReportDate(key)
-  const { latestValid } = getValidSnapshots(snapshots, key, marketDate)
-  return marketOpen ? marketDate : (latestValid?.date ?? marketDate)
+  const { latestValid, ordered } = getValidSnapshots(snapshots, key, marketDate)
+  if (marketOpen) return marketDate
+
+  for (const snap of ordered) {
+    const previous = ordered.find(s => s.date < snap.date)
+    if (!previous) continue
+    const delta = snap[key] - previous[key]
+    if (Math.abs(delta) >= 1) return snap.date
+  }
+
+  return latestValid?.date ?? marketDate
 }
 
 function getWeekStart(dateStr: string): string {

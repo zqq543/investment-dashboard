@@ -51,6 +51,26 @@ function pct(change: number, base?: number) {
   return base && base > 0 ? (change / base) * 100 : undefined
 }
 
+function getEffectiveReportDate(
+  sorted: DailySnapshot[],
+  key: SnapshotValueKey,
+  marketDate: string,
+  marketOpen: boolean,
+  latestDate?: string
+) {
+  if (marketOpen) return marketDate
+
+  for (let i = sorted.length - 1; i > 0; i--) {
+    const snap = sorted[i]
+    const previous = sorted[i - 1]
+    if (!snap || !previous) continue
+    const delta = snap[key] - previous[key]
+    if (Math.abs(delta) >= 1) return snap.date
+  }
+
+  return latestDate ?? marketDate
+}
+
 export function usePnlHistory(
   snapshots: DailySnapshot[],
   market: MarketFilter = 'ALL',
@@ -99,7 +119,7 @@ export function usePnlHistory(
       .map(([date, pnl]) => ({ date, pnl }))
       .sort((a, b) => a.date.localeCompare(b.date)))
 
-    const reportDate = marketOpen ? marketDate : (latestValid?.date ?? marketDate)
+    const reportDate = getEffectiveReportDate(sorted, key, marketDate, marketOpen, latestValid?.date)
     const previous = sorted.filter(s => s.date < reportDate).at(-1)
     if (currentValue !== undefined && previous) {
       merged.set(reportDate, currentValue - previous[key])
