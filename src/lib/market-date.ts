@@ -33,8 +33,7 @@ export function getMarketAwareDate(now = new Date()): string {
   const tw = getZonedParts('Asia/Taipei', now)
   const ny = getZonedParts('America/New_York', now)
 
-  const usMarketStillOpen = isWeekday(ny.date) && ny.hour < 16
-  if (tw.date > ny.date && usMarketStillOpen) return ny.date
+  if (tw.date > ny.date && isWeekday(ny.date)) return ny.date
 
   return tw.date
 }

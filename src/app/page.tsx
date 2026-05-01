@@ -238,6 +238,11 @@ function changeTrendFromBase(values: number[], base?: number) {
   return values.map(v => v - base)
 }
 
+function trendWithBase(values: number[], base?: number) {
+  if (!base || base <= 0 || values.length < 2) return values
+  return Math.abs(values[0] - base) < 1 ? values : [base, ...values]
+}
+
 function periodTrendWithIntraday(
   snapshots: DailySnapshot[],
   market: MarketFilter,
@@ -403,7 +408,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.date.localeCompare(a.date))[0]
 
     return {
-      all: intraday.length >= 2 ? intraday : trendValues(snapshots, market, currentValue),
+      all: intraday.length >= 2 ? trendWithBase(intraday, previous?.[key]) : trendValues(snapshots, market, currentValue),
       today: intraday.length >= 2 ? changeTrendFromBase(intraday, previous?.[key]) : todayTrendValues(snapshots, market, currentValue, marketSession),
       week: periodTrendWithIntraday(snapshots, market, currentValue, 7, intraday),
       month: periodTrendWithIntraday(snapshots, market, currentValue, 31, intraday),
