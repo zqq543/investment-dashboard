@@ -190,16 +190,7 @@ function aggregateHoldingTrend(
     return []
   }
 
-  const activeMarket = market === 'ALL'
-    ? session.usOpen && !session.twOpen
-      ? '美股'
-      : session.twOpen && !session.usOpen
-        ? '台股'
-        : 'ALL'
-    : market
-
   const withTrend = selected
-    .filter(h => activeMarket === 'ALL' || h.market === activeMarket)
     .map(h => {
       return {
         values: trendValueOf(h),
@@ -213,13 +204,10 @@ function aggregateHoldingTrend(
   const pointCount = Math.max(...withTrend.map(item => item.values.length))
   const baseCash = market === 'ALL' ? cash : 0
   const fixedValue = selected
-    .filter(h => activeMarket !== 'ALL' && h.market !== activeMarket)
+    .filter(h => h.market !== market)
     .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
   const noTrendValue = selected
-    .filter(h =>
-      (activeMarket === 'ALL' || h.market === activeMarket)
-      && (!h.trend || h.trend.length < 2)
-    )
+    .filter(h => !h.trend || h.trend.length < 2)
     .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
 
   return Array.from({ length: pointCount }, (_, index) => {
