@@ -202,7 +202,7 @@ function aggregateHoldingTrend(
   if (!withTrend.length) return []
 
   const pointCount = Math.max(...withTrend.map(item => item.values.length))
-  const baseCash = market === 'ALL' ? cash : 0
+  const baseCash = 0
   const fixedValue = selected
     .filter(h => h.market !== market)
     .reduce((sum, h) => sum + (h.currentValue ?? 0), 0)
