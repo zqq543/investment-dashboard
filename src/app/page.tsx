@@ -137,12 +137,8 @@ function aggregateHoldingTrend(
       ? '美股'
       : session.twOpen && !session.usOpen
         ? '台股'
-        : session.twOpen && session.usOpen
-          ? 'ALL'
-          : null
+        : 'ALL'
     : market
-
-  if (!activeMarket) return []
 
   const withTrend = selected
     .filter(h => activeMarket === 'ALL' || h.market === activeMarket)
@@ -454,6 +450,13 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* 持股清單 */}
+        <section className="card p-4 sm:p-5">
+          {loading ? <><div className="h-4 w-20 skeleton rounded mb-4"/><TableSkeleton rows={4}/></> : (
+            <HoldingsTable holdings={fHoldings} marketFilter={market}/>
+          )}
+        </section>
+
         {/* PNL 發散圖 */}
         <section>
           {loading ? (
@@ -482,13 +485,6 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase mb-3">資產分布</p>
             {loading ? <div className="h-52 skeleton rounded-lg"/> : <DistributionChart distribution={fDist}/>}
           </div>
-        </section>
-
-        {/* 持股清單 */}
-        <section className="card p-4 sm:p-5">
-          {loading ? <><div className="h-4 w-20 skeleton rounded mb-4"/><TableSkeleton rows={4}/></> : (
-            <HoldingsTable holdings={fHoldings} marketFilter={market}/>
-          )}
         </section>
 
         {/* 最近交易 */}
