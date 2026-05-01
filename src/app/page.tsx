@@ -465,9 +465,6 @@ export default function DashboardPage() {
 
         {/* 資產卡片 */}
         <section>
-          <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase mb-3">
-            {market === 'ALL' ? '資產總覽' : `${market} 資產`}
-          </p>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             {loading ? <><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/><CardSkeleton/></> : (
               <>
