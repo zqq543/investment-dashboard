@@ -54,7 +54,8 @@ function pct(change: number, base?: number) {
 export function usePnlHistory(
   snapshots: DailySnapshot[],
   market: MarketFilter = 'ALL',
-  currentValue?: number
+  currentValue?: number,
+  marketOpen = false
 ): PnlStats {
   const [stats, setStats] = useState<PnlStats>({
     today: 0,
@@ -98,7 +99,7 @@ export function usePnlHistory(
       .map(([date, pnl]) => ({ date, pnl }))
       .sort((a, b) => a.date.localeCompare(b.date)))
 
-    const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
+    const reportDate = marketOpen ? marketDate : (latestValid?.date ?? marketDate)
     const previous = sorted.filter(s => s.date < reportDate).at(-1)
     if (currentValue !== undefined && previous) {
       merged.set(reportDate, currentValue - previous[key])
@@ -140,7 +141,7 @@ export function usePnlHistory(
       yearEnd: yearStart ? reportDate : undefined,
       history,
     })
-  }, [snapshots, market, currentValue])
+  }, [snapshots, market, currentValue, marketOpen])
 
   return stats
 }

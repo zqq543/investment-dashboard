@@ -38,6 +38,43 @@ function getSnapshotKey(market: MarketFilter): SnapshotValueKey {
   return 'totalAsset'
 }
 
+function isMarketOpenForKey(key: SnapshotValueKey, session: { twOpen: boolean; usOpen: boolean }) {
+  if (key === 'twStockValue') return session.twOpen
+  if (key === 'usStockValue') return session.usOpen
+  return session.twOpen || session.usOpen
+}
+
+function getValidSnapshots(
+  snapshots: DailySnapshot[],
+  key: SnapshotValueKey,
+  marketDate = getSnapshotReportDate(key)
+) {
+  const latestValid = [...snapshots]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .find(s => s.date <= marketDate && typeof s[key] === 'number' && s[key] > 0)
+  const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
+  const ordered = [...snapshots]
+    .filter(s =>
+      s.date <= marketDate
+      && typeof s[key] === 'number'
+      && s[key] > 0
+      && (!needsUsBreakdown || s.usStockValue > 0)
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  return { latestValid, ordered }
+}
+
+function getEffectiveReportDate(
+  snapshots: DailySnapshot[],
+  key: SnapshotValueKey,
+  marketOpen: boolean
+) {
+  const marketDate = getSnapshotReportDate(key)
+  const { latestValid } = getValidSnapshots(snapshots, key, marketDate)
+  return marketOpen ? marketDate : (latestValid?.date ?? marketDate)
+}
+
 function getWeekStart(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
   const day = d.getDay()
@@ -46,14 +83,9 @@ function getWeekStart(dateStr: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-function latestSnapshotDateForMarket(snapshots: DailySnapshot[], market: MarketFilter) {
+function latestSnapshotDateForMarket(snapshots: DailySnapshot[], market: MarketFilter, session: { twOpen: boolean; usOpen: boolean }) {
   const key = getSnapshotKey(market)
-  const marketDate = getSnapshotReportDate(key)
-  const latestValid = [...snapshots]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .find(s => s.date <= marketDate && typeof s[key] === 'number' && s[key] > 0)
-
-  return latestValid?.date
+  return getEffectiveReportDate(snapshots, key, isMarketOpenForKey(key, session))
 }
 
 function trendValues(snapshots: DailySnapshot[], market: MarketFilter, currentValue?: number, days?: number) {
@@ -68,14 +100,15 @@ function trendValues(snapshots: DailySnapshot[], market: MarketFilter, currentVa
   return values
 }
 
-function todayTrendValues(snapshots: DailySnapshot[], market: MarketFilter, currentValue?: number) {
+function todayTrendValues(
+  snapshots: DailySnapshot[],
+  market: MarketFilter,
+  currentValue: number | undefined,
+  session: { twOpen: boolean; usOpen: boolean }
+) {
   if (currentValue === undefined || currentValue <= 0) return []
   const key = getSnapshotKey(market)
-  const marketDate = getSnapshotReportDate(key)
-  const latestValid = [...snapshots]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .find(s => s.date <= marketDate && s[key] > 0)
-  const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
+  const reportDate = getEffectiveReportDate(snapshots, key, isMarketOpenForKey(key, session))
   const previous = [...snapshots]
     .filter(s => s.date < reportDate && s[key] > 0)
     .sort((a, b) => b.date.localeCompare(a.date))[0]
@@ -95,8 +128,12 @@ function aggregateHoldingTrend(
       ? '美股'
       : session.twOpen && !session.usOpen
         ? '台股'
-        : 'ALL'
+        : session.twOpen && session.usOpen
+          ? 'ALL'
+          : null
     : market
+
+  if (!activeMarket) return []
 
   const withTrend = selected
     .filter(h => activeMarket === 'ALL' || h.market === activeMarket)
@@ -162,24 +199,15 @@ function periodTrendWithIntraday(
   return [...withoutCurrent, ...intraday]
 }
 
-function snapshotChanges(snapshots: DailySnapshot[], key: SnapshotValueKey, currentValue: number) {
+function snapshotChanges(
+  snapshots: DailySnapshot[],
+  key: SnapshotValueKey,
+  currentValue: number,
+  session: { twOpen: boolean; usOpen: boolean }
+) {
   const marketDate = getSnapshotReportDate(key)
-  const latestValid = [...snapshots]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .find(s => s.date <= marketDate && typeof s[key] === 'number' && s[key] > 0)
-  const needsUsBreakdown = key === 'totalAsset' && (latestValid?.usStockValue ?? 0) > 0
-
-  const ordered = [...snapshots]
-    .filter(s =>
-      s.date <= marketDate
-      &&
-      typeof s[key] === 'number'
-      && s[key] > 0
-      && (!needsUsBreakdown || s.usStockValue > 0)
-    )
-    .sort((a, b) => b.date.localeCompare(a.date))
-
-  const reportDate = key === 'twStockValue' ? (latestValid?.date ?? marketDate) : marketDate
+  const { ordered } = getValidSnapshots(snapshots, key, marketDate)
+  const reportDate = getEffectiveReportDate(snapshots, key, isMarketOpenForKey(key, session))
   const previous = ordered.find(s => s.date < reportDate)
 
   const calc = (base?: DailySnapshot) => {
@@ -222,15 +250,16 @@ function filterSummary(
   holdings: Holding[],
   market: MarketFilter,
   base: PortfolioSummary,
-  snapshots: DailySnapshot[]
+  snapshots: DailySnapshot[],
+  session: { twOpen: boolean; usOpen: boolean }
 ): PortfolioSummary {
   if (market === 'ALL') {
-    return { ...base, ...snapshotChanges(snapshots, 'totalAsset', base.totalAsset) }
+    return { ...base, ...snapshotChanges(snapshots, 'totalAsset', base.totalAsset, session) }
   }
   const filt  = holdings.filter(h => h.market === market)
   const sv    = filt.reduce((s, h) => s + (h.currentValue ?? 0), 0)
   const upnl  = filt.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
-  const changes = snapshotChanges(snapshots, market === '台股' ? 'twStockValue' : 'usStockValue', sv)
+  const changes = snapshotChanges(snapshots, market === '台股' ? 'twStockValue' : 'usStockValue', sv, session)
   return { ...base, totalAsset: sv, stockValue: sv, unrealizedPnl: upnl, cash: 0,
     twStockValue: market === '台股' ? sv : 0, usStockValue: market === '美股' ? sv : 0,
     ...changes }
@@ -286,8 +315,8 @@ export default function DashboardPage() {
     if (market === 'ALL') return data.distribution
     return { cash: 0, stocks: data.distribution.stocks.filter(s => s.market === market) }
   }, [data, market])
-  const fSum   = useMemo(() => !data ? null : filterSummary(data.holdings, market, data.summary, data.snapshots), [data, market])
   const marketSession = useMemo(() => getMarketSession(market, clock), [market, clock])
+  const fSum   = useMemo(() => !data ? null : filterSummary(data.holdings, market, data.summary, data.snapshots, marketSession), [data, market, marketSession])
   const counts = useMemo(() => ({
     ALL: data?.holdings.length ?? 0,
     台股: data?.holdings.filter(h => h.market === '台股').length ?? 0,
@@ -295,29 +324,31 @@ export default function DashboardPage() {
   }), [data])
 
   // PNL 追蹤（snapshots 是升序）
-  const pnlStats = usePnlHistory(data?.snapshots ?? [], market, fSum?.totalAsset)
+  const pnlStats = usePnlHistory(
+    data?.snapshots ?? [],
+    market,
+    fSum?.totalAsset,
+    isMarketOpenForKey(getSnapshotKey(market), marketSession)
+  )
 
   const s            = fSum
   const latestSnapDate = useMemo(
-    () => data ? latestSnapshotDateForMarket(data.snapshots, market) : undefined,
-    [data, market]
+    () => data ? latestSnapshotDateForMarket(data.snapshots, market, marketSession) : undefined,
+    [data, market, marketSession]
   )
   const statTrends = useMemo(() => {
     const snapshots = data?.snapshots ?? []
     const currentValue = fSum?.totalAsset
     const intraday = data ? aggregateHoldingTrend(fHoldings, market, fSum?.cash ?? 0, marketSession) : []
     const key = getSnapshotKey(market)
-    const latestValid = [...snapshots]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .find(s => s.date <= getSnapshotReportDate(key) && s[key] > 0)
-    const reportDate = key === 'twStockValue' ? (latestValid?.date ?? getSnapshotReportDate(key)) : getSnapshotReportDate(key)
+    const reportDate = getEffectiveReportDate(snapshots, key, isMarketOpenForKey(key, marketSession))
     const previous = [...snapshots]
       .filter(s => s.date < reportDate && s[key] > 0)
       .sort((a, b) => b.date.localeCompare(a.date))[0]
 
     return {
       all: intraday.length >= 2 ? intraday : trendValues(snapshots, market, currentValue),
-      today: intraday.length >= 2 ? changeTrendFromBase(intraday, previous?.[key]) : todayTrendValues(snapshots, market, currentValue),
+      today: intraday.length >= 2 ? changeTrendFromBase(intraday, previous?.[key]) : todayTrendValues(snapshots, market, currentValue, marketSession),
       week: periodTrendWithIntraday(snapshots, market, currentValue, 7, intraday),
       month: periodTrendWithIntraday(snapshots, market, currentValue, 31, intraday),
       year: periodTrendWithIntraday(snapshots, market, currentValue, 366, intraday),
