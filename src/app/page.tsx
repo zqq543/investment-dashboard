@@ -428,7 +428,7 @@ export default function DashboardPage() {
         )}
 
         {/* Tab 列 + 指數（同一行：指數緊接在 Tab 右側） */}
-        <div className="border-b border-border pb-3">
+        <div className="sticky top-0 z-30 -mx-3 border-b border-border bg-background/95 px-3 pb-3 pt-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
           <div className="flex flex-col lg:flex-row lg:items-start gap-3 lg:gap-5">
             {/* 左：Tab 按鈕 + 統計 */}
             <div className="flex flex-col gap-1.5 flex-shrink-0">
