@@ -69,7 +69,7 @@ function buildAvailableMonths(snapshots: DailySnapshot[], key: SnapshotKey) {
   snapshots.forEach(s => {
     if (valueOf(s, key) > 0) months.add(s.date.slice(0, 7))
   })
-  return [...months].sort()
+  return Array.from(months).sort()
 }
 
 function buildEntries(snapshots: DailySnapshot[], key: SnapshotKey) {
@@ -227,7 +227,7 @@ export function RewardCalendar({ snapshots, marketFilter }: { snapshots: DailySn
   const years = useMemo(() => {
     const available = new Set(availableMonths.map(m => Number(m.slice(0, 4))))
     if (!available.size) available.add(new Date().getFullYear())
-    return [...available].sort((a, b) => a - b)
+    return Array.from(available).sort((a, b) => a - b)
   }, [availableMonths])
   const marketLabel = marketFilter === 'ALL' ? '全部' : marketFilter
 
