@@ -33,6 +33,22 @@ function fmtSigned(n: number) { return `${n >= 0 ? '+' : '-'}NT$${fmt(Math.abs(n
 
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
+function getDefaultMarketByTaipeiTime(now = new Date()): MarketFilter {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(now)
+  const hour = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
+  const minute = Number(parts.find(p => p.type === 'minute')?.value ?? 0)
+  const totalMinutes = hour * 60 + minute
+
+  if (totalMinutes >= 9 * 60 && totalMinutes <= 13 * 60 + 30) return '台股'
+  if (totalMinutes >= 21 * 60 || totalMinutes < 8 * 60 + 55) return '美股'
+  return 'ALL'
+}
+
 function getSnapshotKey(market: MarketFilter): SnapshotValueKey {
   if (market === '台股') return 'twStockValue'
   if (market === '美股') return 'usStockValue'
@@ -320,7 +336,7 @@ export default function DashboardPage() {
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [market,       setMarket]       = useState<MarketFilter>('ALL')
+  const [market,       setMarket]       = useState<MarketFilter>(() => getDefaultMarketByTaipeiTime())
   const [refreshIntervalSec, setRefreshIntervalSec] = useState(300)
   const [clock, setClock] = useState(() => new Date())
 
