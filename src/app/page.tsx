@@ -9,6 +9,7 @@ import { HoldingsTable } from '@/components/dashboard/HoldingsTable'
 import { TransactionList } from '@/components/dashboard/TransactionList'
 import { MarketIndices } from '@/components/dashboard/MarketIndices'
 import { PnlChart } from '@/components/dashboard/PnlChart'
+import { RewardCalendar } from '@/components/dashboard/RewardCalendar'
 import { CardSkeleton, TableSkeleton } from '@/components/ui/Skeleton'
 import { usePnlHistory } from '@/lib/usePnlHistory'
 import { cn } from '@/lib/utils'
@@ -526,6 +527,18 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase mb-3">資產分布</p>
             {loading ? <div className="h-52 skeleton rounded-lg"/> : <DistributionChart distribution={fDist}/>}
           </div>
+        </section>
+
+        {/* 報酬日曆 */}
+        <section>
+          {loading ? (
+            <div className="card p-4 sm:p-5">
+              <div className="h-5 w-24 skeleton rounded mb-4" />
+              <div className="h-80 skeleton rounded-lg" />
+            </div>
+          ) : (
+            <RewardCalendar snapshots={data?.snapshots ?? []} marketFilter={market} />
+          )}
         </section>
 
         {/* 最近交易 */}
