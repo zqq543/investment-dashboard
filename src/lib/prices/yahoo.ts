@@ -116,10 +116,12 @@ export class YahooFinanceProvider implements PriceProvider {
       }
 
       const trendOpen = trend.find(v => Number.isFinite(v) && v > 0) ?? 0
-      const trendChange = trendOpen > 0 ? price - trendOpen : 0
+      const trendClose = [...trend].reverse().find(v => Number.isFinite(v) && v > 0) ?? 0
+      const trendChange = trendOpen > 0 && trendClose > 0 ? trendClose - trendOpen : 0
       const metaChange = finiteNumber(meta?.regularMarketChange)
       const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
       const computedChange = prevClose > 0 ? price - prevClose : 0
+      const hasMeaningfulTrendMove = Math.abs(trendChange) >= 0.005
       const useMetaChange = market === '美股'
         && metaChange !== undefined
         && metaChangePct !== undefined
@@ -127,8 +129,8 @@ export class YahooFinanceProvider implements PriceProvider {
         && Math.abs(metaChange - computedChange) <= Math.max(0.05, Math.abs(computedChange) * 0.2)
       const useTrendChange = market === '美股'
         && !useMetaChange
-        && Math.abs(computedChange) < 0.0001
-        && Math.abs(trendChange) > 0.0001
+        && Math.abs(computedChange) < 0.005
+        && hasMeaningfulTrendMove
       const change = useMetaChange
         ? metaChange
         : useTrendChange
