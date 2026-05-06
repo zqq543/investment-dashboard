@@ -191,16 +191,6 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
             </button>
           )}
           <div className="min-w-[9.5rem] text-right">
-            <div>市值 <span className="text-foreground font-medium tabular-nums">
-              {formatMoney(subtotal.value, 'TWD')}
-            </span></div>
-            {showConvertedValues && (
-              <div className="text-[11px] tabular-nums mt-0.5">
-                {formatMoney(subtotal.usdValue, 'USD')}
-              </div>
-            )}
-          </div>
-          <div className="min-w-[9.5rem] text-right">
             <div className="flex items-center justify-end gap-1">
               今日損益
               <span className={cn('font-medium tabular-nums inline-flex items-center gap-0.5', dayPnlPos ? 'text-positive' : 'text-negative')}>
@@ -211,6 +201,16 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
             {showConvertedValues && (
               <div className={cn('text-[11px] tabular-nums mt-0.5', subtotal.usdDayPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
                 {formatSignedMoney(subtotal.usdDayPnl, 'USD')}
+              </div>
+            )}
+          </div>
+          <div className="min-w-[9.5rem] text-right">
+            <div>市值 <span className="text-foreground font-medium tabular-nums">
+              {formatMoney(subtotal.value, 'TWD')}
+            </span></div>
+            {showConvertedValues && (
+              <div className="text-[11px] tabular-nums mt-0.5">
+                {formatMoney(subtotal.usdValue, 'USD')}
               </div>
             )}
           </div>
@@ -242,8 +242,8 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden lg:table-cell">今日趨勢</th>
               <SortHeader label="今日" sortKey="dayChange" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="今日損益" sortKey="dayPnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden md:table-cell" />
-              <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="損益" sortKey="pnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -339,14 +339,6 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                       </div>
                     )}
                   </td>
-                  <td className="py-3.5 px-3 text-right tabular-nums font-medium hidden sm:table-cell">
-                    <div>{formatMoney(displayValue, 'TWD')}</div>
-                    {isUS && showConvertedValues && (
-                      <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                        {formatMoney(localValue, 'USD')}
-                      </div>
-                    )}
-                  </td>
                   <td className="py-3.5 px-3 text-right">
                     <div className={cn('tabular-nums font-medium flex items-center justify-end gap-0.5', displayPnlPos ? 'text-positive' : 'text-negative')}>
                       <span className={displayPnlPos ? 'arrow-up' : 'arrow-down'}>{displayPnlPos ? '▲' : '▼'}</span>
@@ -364,6 +356,14 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                       <span className={dayPos ? 'arrow-up' : 'arrow-down'}>{dayPos ? '▲' : '▼'}</span>
                       今日 {Math.abs(dayPct).toFixed(2)}%
                     </div>
+                  </td>
+                  <td className="py-3.5 px-3 text-right tabular-nums font-medium hidden sm:table-cell">
+                    <div>{formatMoney(displayValue, 'TWD')}</div>
+                    {isUS && showConvertedValues && (
+                      <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                        {formatMoney(localValue, 'USD')}
+                      </div>
+                    )}
                   </td>
                 </tr>
               )
