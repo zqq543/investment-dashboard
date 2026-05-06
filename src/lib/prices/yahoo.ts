@@ -25,6 +25,22 @@ export class YahooFinanceProvider implements PriceProvider {
     return symbol.toUpperCase()
   }
 
+  private async fetchQuote(yahooSymbol: string) {
+    try {
+      const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol)}`
+      const quoteCtrl = new AbortController()
+      const quoteTid = setTimeout(() => quoteCtrl.abort(), 8000)
+      const quoteRes = await fetch(quoteUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com' },
+        signal: quoteCtrl.signal, cache: 'no-store',
+      })
+      clearTimeout(quoteTid)
+      return quoteRes.ok ? (await quoteRes.json())?.quoteResponse?.result?.[0] : null
+    } catch {
+      return null
+    }
+  }
+
   private extractLatestSessionTrend(chart: any): number[] {
     const timestamps = (chart?.timestamp ?? []) as number[]
     const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as Array<number | null>
@@ -57,6 +73,7 @@ export class YahooFinanceProvider implements PriceProvider {
     const yahooSymbol = this.toYahooSymbol(symbol, market)
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=${range}`
     try {
+      const quote = await this.fetchQuote(yahooSymbol)
       const ctrl = new AbortController()
       const tid  = setTimeout(() => ctrl.abort(), 8000)
       const res  = await fetch(url, {
@@ -73,9 +90,11 @@ export class YahooFinanceProvider implements PriceProvider {
       const valid  = closes.filter((v): v is number => v != null && v > 0)
 
       // 週末強制用最後收盤，不用 regularMarketPrice，避免休市日產生假更新。
+      const quotePrice = positiveNumber(quote?.regularMarketPrice)
       const price = isWeekend()
-        ? valid[valid.length - 1] || 0
-        : (positiveNumber(meta?.regularMarketPrice) ||
+        ? (quotePrice || valid[valid.length - 1] || 0)
+        : (quotePrice ||
+           positiveNumber(meta?.regularMarketPrice) ||
            valid[valid.length - 1] ||
            positiveNumber(meta?.previousClose) || 0)
 
@@ -90,9 +109,10 @@ export class YahooFinanceProvider implements PriceProvider {
       const dailyPrevClose =
         (lastCloseMatchesPrice ? secondLastValidClose : lastValidClose) ||
         secondLastValidClose
+      const quotePrevClose = positiveNumber(quote?.regularMarketPreviousClose)
       const metaPrevClose = positiveNumber(meta?.previousClose) || positiveNumber(meta?.chartPreviousClose)
       const prevClose = market === '美股'
-        ? (metaPrevClose || dailyPrevClose)
+        ? (quotePrevClose || positiveNumber(meta?.previousClose) || dailyPrevClose)
         : (dailyPrevClose || metaPrevClose)
       let trend: number[] = []
       try {
@@ -117,9 +137,10 @@ export class YahooFinanceProvider implements PriceProvider {
         trend = prevClose > 0 ? [prevClose, price] : valid.slice(-2)
       }
 
-      const metaChange = finiteNumber(meta?.regularMarketChange)
-      const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
+      const metaChange = finiteNumber(quote?.regularMarketChange) ?? finiteNumber(meta?.regularMarketChange)
+      const metaChangePct = finiteNumber(quote?.regularMarketChangePercent) ?? finiteNumber(meta?.regularMarketChangePercent)
       const computedChange = prevClose > 0 ? price - prevClose : 0
+      const computedChangePct = prevClose > 0 ? (computedChange / prevClose) * 100 : 0
       const useMetaChange = market === '美股'
         && metaChange !== undefined
         && metaChangePct !== undefined
@@ -129,7 +150,7 @@ export class YahooFinanceProvider implements PriceProvider {
         : computedChange
       const changePct = useMetaChange
         ? metaChangePct
-        : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
+        : computedChangePct
 
       return {
         symbol, price,
