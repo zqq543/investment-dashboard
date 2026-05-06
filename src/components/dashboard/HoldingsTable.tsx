@@ -9,7 +9,7 @@ interface HoldingsTableProps {
   marketFilter?: MarketFilter
 }
 
-type SortKey = 'shares' | 'price' | 'dayChange' | 'value' | 'pnl'
+type SortKey = 'shares' | 'price' | 'dayChange' | 'dayPnl' | 'value' | 'pnl'
 type SortDir = 'asc' | 'desc'
 
 function formatMoney(amount: number, currency: 'USD' | 'TWD', fractionDigits?: number) {
@@ -19,6 +19,10 @@ function formatMoney(amount: number, currency: 'USD' | 'TWD', fractionDigits?: n
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}`
+}
+
+function formatSignedMoney(amount: number, currency: 'USD' | 'TWD', fractionDigits?: number) {
+  return `${amount >= 0 ? '+' : '-'}${formatMoney(amount, currency, fractionDigits)}`
 }
 
 function PriceSourceBadge({ source }: { source?: string }) {
@@ -64,10 +68,13 @@ function getSortValue(h: Holding, key: SortKey, marketFilter: MarketFilter): num
   const cur = h.currentPrice ?? h.avgCost
   const localValue = cur * h.shares
   const rate = h.currency === 'USD' && localValue > 0 ? (h.currentValue ?? 0) / localValue : 1
+  const localDayPnl = (h.dayChange ?? 0) * h.shares
+  const dayPnl = h.currency === 'USD' ? localDayPnl * rate : localDayPnl
 
   if (key === 'shares') return h.shares
   if (key === 'price') return marketFilter === 'ALL' && h.currency === 'USD' ? cur * rate : cur
   if (key === 'dayChange') return h.dayChangePct ?? 0
+  if (key === 'dayPnl') return dayPnl
 
   return key === 'value' ? (h.currentValue ?? 0) : (h.unrealizedPnl ?? 0)
 }
@@ -128,6 +135,13 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
 
   const subtotal = useMemo(() => ({
     value: holdings.reduce((s, h) => s + (h.currentValue ?? 0), 0),
+    dayPnl: holdings.reduce((s, h) => {
+      const cur = h.currentPrice ?? h.avgCost
+      const localValue = cur * h.shares
+      const rate = h.currency === 'USD' && localValue > 0 ? (h.currentValue ?? 0) / localValue : 1
+      const localDayPnl = (h.dayChange ?? 0) * h.shares
+      return s + (h.currency === 'USD' ? localDayPnl * rate : localDayPnl)
+    }, 0),
     pnl:   holdings.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0),
     usdValue: holdings
       .filter(h => h.currency === 'USD')
@@ -135,11 +149,15 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
     usdPnl: holdings
       .filter(h => h.currency === 'USD')
       .reduce((s, h) => s + (((h.currentPrice ?? h.avgCost) - h.avgCost) * h.shares), 0),
+    usdDayPnl: holdings
+      .filter(h => h.currency === 'USD')
+      .reduce((s, h) => s + ((h.dayChange ?? 0) * h.shares), 0),
   }), [holdings])
 
   const hasUsdHolding = holdings.some(h => h.currency === 'USD')
   const showConvertedValues = showConverted && hasUsdHolding
   const pnlPos = subtotal.pnl >= 0
+  const dayPnlPos = subtotal.dayPnl >= 0
   const title  = marketFilter === 'ALL' ? '持股清單' : `${marketFilter} 持股`
 
   if (holdings.length === 0) {
@@ -184,6 +202,20 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
           </div>
           <div className="min-w-[9.5rem] text-right">
             <div className="flex items-center justify-end gap-1">
+              今日損益
+              <span className={cn('font-medium tabular-nums inline-flex items-center gap-0.5', dayPnlPos ? 'text-positive' : 'text-negative')}>
+                <span className={dayPnlPos ? 'arrow-up' : 'arrow-down'}>{dayPnlPos ? '▲' : '▼'}</span>
+                {formatSignedMoney(subtotal.dayPnl, 'TWD')}
+              </span>
+            </div>
+            {showConvertedValues && (
+              <div className={cn('text-[11px] tabular-nums mt-0.5', subtotal.usdDayPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
+                {formatSignedMoney(subtotal.usdDayPnl, 'USD')}
+              </div>
+            )}
+          </div>
+          <div className="min-w-[9.5rem] text-right">
+            <div className="flex items-center justify-end gap-1">
               損益
               <span className={cn('font-medium tabular-nums flex items-center gap-0.5 inline-flex', pnlPos ? 'text-positive' : 'text-negative')}>
                 <span className={pnlPos ? 'arrow-up' : 'arrow-down'}>{pnlPos ? '▲' : '▼'}</span>
@@ -209,6 +241,7 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               <SortHeader label="現價" sortKey="price" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
               <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground tracking-wide hidden lg:table-cell">今日趨勢</th>
               <SortHeader label="今日" sortKey="dayChange" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
+              <SortHeader label="今日損益" sortKey="dayPnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden md:table-cell" />
               <SortHeader label="市值" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={handleSort} className="hidden sm:table-cell" />
               <SortHeader label="損益" sortKey="pnl" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
             </tr>
@@ -231,6 +264,8 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               const positionPos = positionPct >= 0
               const dayPct = h.dayChangePct ?? 0
               const dayChange = h.dayChange ?? 0
+              const localDayPnl = dayChange * h.shares
+              const dayPnlTwd = isUS ? localDayPnl * rate : localDayPnl
               const dayPos = dayPct >= 0
 
               return (
@@ -292,6 +327,17 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
                     <div className={cn('text-[11px] text-right tabular-nums', dayPos ? 'text-positive/80' : 'text-negative/80')}>
                       {dayChange >= 0 ? '+' : '-'}{formatMoney(dayChange, h.currency, 2)}
                     </div>
+                  </td>
+                  <td className="py-3.5 px-3 text-right hidden md:table-cell">
+                    <div className={cn('tabular-nums font-medium inline-flex items-center justify-end gap-0.5', dayPnlTwd >= 0 ? 'text-positive' : 'text-negative')}>
+                      <span className={dayPnlTwd >= 0 ? 'arrow-up' : 'arrow-down'}>{dayPnlTwd >= 0 ? '▲' : '▼'}</span>
+                      {formatSignedMoney(dayPnlTwd, 'TWD')}
+                    </div>
+                    {isUS && showConvertedValues && (
+                      <div className={cn('text-[11px] text-right tabular-nums', localDayPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
+                        {formatSignedMoney(localDayPnl, 'USD')}
+                      </div>
+                    )}
                   </td>
                   <td className="py-3.5 px-3 text-right tabular-nums font-medium hidden sm:table-cell">
                     <div>{formatMoney(displayValue, 'TWD')}</div>
