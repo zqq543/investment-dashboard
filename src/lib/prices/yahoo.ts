@@ -91,7 +91,9 @@ export class YahooFinanceProvider implements PriceProvider {
         (lastCloseMatchesPrice ? secondLastValidClose : lastValidClose) ||
         secondLastValidClose
       const metaPrevClose = positiveNumber(meta?.previousClose) || positiveNumber(meta?.chartPreviousClose)
-      const prevClose = dailyPrevClose || metaPrevClose
+      const prevClose = market === '美股'
+        ? (metaPrevClose || dailyPrevClose)
+        : (dailyPrevClose || metaPrevClose)
       let trend: number[] = []
       try {
         const intradayUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=5m&range=5d`
@@ -115,32 +117,19 @@ export class YahooFinanceProvider implements PriceProvider {
         trend = prevClose > 0 ? [prevClose, price] : valid.slice(-2)
       }
 
-      const trendOpen = trend.find(v => Number.isFinite(v) && v > 0) ?? 0
-      const trendClose = [...trend].reverse().find(v => Number.isFinite(v) && v > 0) ?? 0
-      const trendChange = trendOpen > 0 && trendClose > 0 ? trendClose - trendOpen : 0
       const metaChange = finiteNumber(meta?.regularMarketChange)
       const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
       const computedChange = prevClose > 0 ? price - prevClose : 0
-      const hasMeaningfulTrendMove = Math.abs(trendChange) >= 0.005
       const useMetaChange = market === '美股'
         && metaChange !== undefined
         && metaChangePct !== undefined
-        && Math.abs(metaChange) > 0.0001
-        && Math.abs(metaChange - computedChange) <= Math.max(0.05, Math.abs(computedChange) * 0.2)
-      const useTrendChange = market === '美股'
-        && !useMetaChange
-        && Math.abs(computedChange) < 0.005
-        && hasMeaningfulTrendMove
+        && (Math.abs(metaChange) > 0.0001 || Math.abs(metaChangePct) > 0.0001)
       const change = useMetaChange
         ? metaChange
-        : useTrendChange
-          ? trendChange
-          : computedChange
+        : computedChange
       const changePct = useMetaChange
         ? metaChangePct
-        : useTrendChange && trendOpen > 0
-          ? (trendChange / trendOpen) * 100
-          : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
+        : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
 
       return {
         symbol, price,

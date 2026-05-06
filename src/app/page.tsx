@@ -312,6 +312,22 @@ function snapshotChanges(
   }
 }
 
+function calcHoldingsDayPnlTwd(holdings: Holding[]) {
+  return holdings.reduce((sum, h) => {
+    const currentPrice = h.currentPrice ?? h.avgCost
+    const localValue = currentPrice * h.shares
+    const fxRate = h.currency === 'USD' && localValue > 0
+      ? (h.currentValue ?? 0) / localValue
+      : 1
+    return sum + ((h.dayChange ?? 0) * h.shares * fxRate)
+  }, 0)
+}
+
+function calcDayPnlPct(dayPnl: number, currentValue: number) {
+  const base = currentValue - dayPnl
+  return base > 0 ? (dayPnl / base) * 100 : 0
+}
+
 function filterSummary(
   holdings: Holding[],
   market: MarketFilter,
@@ -320,15 +336,18 @@ function filterSummary(
   session: { twOpen: boolean; usOpen: boolean }
 ): PortfolioSummary {
   if (market === 'ALL') {
-    return { ...base, ...snapshotChanges(snapshots, 'totalAsset', base.totalAsset, session) }
+    const changes = snapshotChanges(snapshots, 'totalAsset', base.totalAsset, session)
+    const todayPnl = calcHoldingsDayPnlTwd(holdings)
+    return { ...base, ...changes, todayChange: todayPnl, todayChangePct: calcDayPnlPct(todayPnl, base.totalAsset) }
   }
   const filt  = holdings.filter(h => h.market === market)
   const sv    = filt.reduce((s, h) => s + (h.currentValue ?? 0), 0)
   const upnl  = filt.reduce((s, h) => s + (h.unrealizedPnl ?? 0), 0)
   const changes = snapshotChanges(snapshots, market === '台股' ? 'twStockValue' : 'usStockValue', sv, session)
+  const todayPnl = calcHoldingsDayPnlTwd(filt)
   return { ...base, totalAsset: sv, stockValue: sv, unrealizedPnl: upnl, cash: 0,
     twStockValue: market === '台股' ? sv : 0, usStockValue: market === '美股' ? sv : 0,
-    ...changes }
+    ...changes, todayChange: todayPnl, todayChangePct: calcDayPnlPct(todayPnl, sv) }
 }
 
 export default function DashboardPage() {
