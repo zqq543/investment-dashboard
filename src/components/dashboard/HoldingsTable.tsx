@@ -109,6 +109,35 @@ function SortHeader({
   )
 }
 
+function SummaryMetric({
+  label,
+  value,
+  tone = 'neutral',
+  subValue,
+}: {
+  label: string
+  value: string
+  tone?: 'positive' | 'negative' | 'neutral'
+  subValue?: string
+}) {
+  const colored = tone !== 'neutral'
+  const positive = tone === 'positive'
+  return (
+    <div className="min-w-[9.5rem] text-right">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className={cn('mt-0.5 font-semibold tabular-nums', colored ? (positive ? 'text-positive' : 'text-negative') : 'text-foreground')}>
+        {colored && <span className={cn('mr-1 inline-block', positive ? 'arrow-up' : 'arrow-down')}>{positive ? '▲' : '▼'}</span>}
+        {value}
+      </div>
+      {subValue && (
+        <div className={cn('mt-0.5 text-[11px] tabular-nums', colored ? (positive ? 'text-positive/80' : 'text-negative/80') : 'text-muted-foreground')}>
+          {subValue}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('dayChange')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -190,44 +219,23 @@ export function HoldingsTable({ holdings, marketFilter = 'ALL' }: HoldingsTableP
               顯示台幣/美金
             </button>
           )}
-          <div className="min-w-[9.5rem] text-right">
-            <div className="flex items-center justify-end gap-1">
-              今日損益
-              <span className={cn('font-medium tabular-nums inline-flex items-center gap-0.5', dayPnlPos ? 'text-positive' : 'text-negative')}>
-                <span className={dayPnlPos ? 'arrow-up' : 'arrow-down'}>{dayPnlPos ? '▲' : '▼'}</span>
-                {formatSignedMoney(subtotal.dayPnl, 'TWD')}
-              </span>
-            </div>
-            {showConvertedValues && (
-              <div className={cn('text-[11px] tabular-nums mt-0.5', subtotal.usdDayPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
-                {formatSignedMoney(subtotal.usdDayPnl, 'USD')}
-              </div>
-            )}
-          </div>
-          <div className="min-w-[9.5rem] text-right">
-            <div>市值 <span className="text-foreground font-medium tabular-nums">
-              {formatMoney(subtotal.value, 'TWD')}
-            </span></div>
-            {showConvertedValues && (
-              <div className="text-[11px] tabular-nums mt-0.5">
-                {formatMoney(subtotal.usdValue, 'USD')}
-              </div>
-            )}
-          </div>
-          <div className="min-w-[9.5rem] text-right">
-            <div className="flex items-center justify-end gap-1">
-              損益
-              <span className={cn('font-medium tabular-nums flex items-center gap-0.5 inline-flex', pnlPos ? 'text-positive' : 'text-negative')}>
-                <span className={pnlPos ? 'arrow-up' : 'arrow-down'}>{pnlPos ? '▲' : '▼'}</span>
-                {formatMoney(subtotal.pnl, 'TWD')}
-              </span>
-            </div>
-            {showConvertedValues && (
-              <div className={cn('text-[11px] tabular-nums mt-0.5', subtotal.usdPnl >= 0 ? 'text-positive/80' : 'text-negative/80')}>
-                {subtotal.usdPnl >= 0 ? '+' : '-'}{formatMoney(subtotal.usdPnl, 'USD')}
-              </div>
-            )}
-          </div>
+          <SummaryMetric
+            label="今日損益"
+            value={formatSignedMoney(subtotal.dayPnl, 'TWD')}
+            tone={dayPnlPos ? 'positive' : 'negative'}
+            subValue={showConvertedValues ? formatSignedMoney(subtotal.usdDayPnl, 'USD') : undefined}
+          />
+          <SummaryMetric
+            label="損益"
+            value={formatSignedMoney(subtotal.pnl, 'TWD')}
+            tone={pnlPos ? 'positive' : 'negative'}
+            subValue={showConvertedValues ? formatSignedMoney(subtotal.usdPnl, 'USD') : undefined}
+          />
+          <SummaryMetric
+            label="市值"
+            value={formatMoney(subtotal.value, 'TWD')}
+            subValue={showConvertedValues ? formatMoney(subtotal.usdValue, 'USD') : undefined}
+          />
         </div>
       </div>
 
