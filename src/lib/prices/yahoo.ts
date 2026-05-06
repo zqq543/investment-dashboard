@@ -91,16 +91,19 @@ export class YahooFinanceProvider implements PriceProvider {
         (lastCloseMatchesPrice ? secondLastValidClose : lastValidClose) ||
         secondLastValidClose
       const metaPrevClose = positiveNumber(meta?.previousClose) || positiveNumber(meta?.chartPreviousClose)
-      const prevClose = market === '美股'
-        ? (metaPrevClose || dailyPrevClose)
-        : (dailyPrevClose || metaPrevClose)
+      const prevClose = dailyPrevClose || metaPrevClose
       const metaChange = finiteNumber(meta?.regularMarketChange)
       const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
       const computedChange = prevClose > 0 ? price - prevClose : 0
-      const change = market === '美股' && metaChange !== undefined && Math.abs(metaChange) > 0.0001
+      const useMetaChange = market === '美股'
+        && metaChange !== undefined
+        && metaChangePct !== undefined
+        && Math.abs(metaChange) > 0.0001
+        && Math.abs(metaChange - computedChange) <= Math.max(0.05, Math.abs(computedChange) * 0.2)
+      const change = useMetaChange
         ? metaChange
         : computedChange
-      const changePct = market === '美股' && metaChangePct !== undefined && Math.abs(metaChangePct) > 0.0001
+      const changePct = useMetaChange
         ? metaChangePct
         : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
 
