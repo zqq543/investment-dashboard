@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getHoldings, getCashflows, getTransactions, getDailySnapshots } from '@/lib/notion/queries'
-import { getPrices } from '@/lib/prices/cache'
+import { clearCache, getPrices } from '@/lib/prices/cache'
 import {
   enrichHoldings, calcCash, calcRealizedPnl,
   buildPortfolioSummary, buildAssetDistribution,
@@ -10,8 +10,11 @@ export const runtime = 'nodejs'
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url)
+    if (url.searchParams.get('refresh') === '1') clearCache()
+
     const [holdings, cashflows, transactions, snapshots] = await Promise.all([
       getHoldings(),
       getCashflows(),

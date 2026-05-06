@@ -340,9 +340,9 @@ export default function DashboardPage() {
   const [refreshIntervalSec, setRefreshIntervalSec] = useState(300)
   const [clock, setClock] = useState(() => new Date())
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (forceRefresh = false) => {
     try {
-      const res = await fetch('/api/dashboard', { cache: 'no-store' })
+      const res = await fetch(`/api/dashboard${forceRefresh ? '?refresh=1' : ''}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`伺服器錯誤 (${res.status})`)
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -365,7 +365,7 @@ export default function DashboardPage() {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
-    try { await fetch('/api/prices', { method: 'POST' }); await fetchData() }
+    try { await fetchData(true) }
     finally { setIsRefreshing(false) }
   }, [fetchData])
 
@@ -439,7 +439,7 @@ export default function DashboardPage() {
           <div className="rounded-lg border p-3 text-sm flex items-start gap-2"
             style={{ borderColor: 'hsl(var(--positive)/0.3)', backgroundColor: 'hsl(var(--positive)/0.06)', color: 'hsl(var(--positive))' }}>
             <span className="flex-1">{error}</span>
-            <button onClick={fetchData} className="text-xs underline">重試</button>
+            <button onClick={() => fetchData(true)} className="text-xs underline">重試</button>
           </div>
         )}
 
