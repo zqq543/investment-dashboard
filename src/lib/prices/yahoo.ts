@@ -6,6 +6,16 @@ function isWeekend(): boolean {
   return day === 0 || day === 6
 }
 
+function positiveNumber(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : undefined
+}
+
 export class YahooFinanceProvider implements PriceProvider {
   name = 'Yahoo Finance'
 
@@ -65,9 +75,9 @@ export class YahooFinanceProvider implements PriceProvider {
       // 週末強制用最後收盤，不用 regularMarketPrice，避免休市日產生假更新。
       const price = isWeekend()
         ? valid[valid.length - 1] || 0
-        : ((meta?.regularMarketPrice > 0 ? meta.regularMarketPrice : 0) ||
+        : (positiveNumber(meta?.regularMarketPrice) ||
            valid[valid.length - 1] ||
-           (meta?.previousClose > 0 ? meta.previousClose : 0) || 0)
+           positiveNumber(meta?.previousClose) || 0)
 
       if (price <= 0) return null
 
@@ -77,13 +87,22 @@ export class YahooFinanceProvider implements PriceProvider {
       const lastValidClose = valid[valid.length - 1] || 0
       const secondLastValidClose = valid[valid.length - 2] || 0
       const lastCloseMatchesPrice = lastValidClose > 0 && Math.abs(lastValidClose - price) < 0.0001
-      const prevClose =
+      const dailyPrevClose =
         (lastCloseMatchesPrice ? secondLastValidClose : lastValidClose) ||
-        secondLastValidClose ||
-        (meta?.previousClose > 0 ? meta.previousClose : 0) ||
-        (meta?.chartPreviousClose > 0 ? meta.chartPreviousClose : 0)
-      const change = prevClose > 0 ? price - prevClose : 0
-      const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0
+        secondLastValidClose
+      const metaPrevClose = positiveNumber(meta?.previousClose) || positiveNumber(meta?.chartPreviousClose)
+      const prevClose = market === '美股'
+        ? (metaPrevClose || dailyPrevClose)
+        : (dailyPrevClose || metaPrevClose)
+      const metaChange = finiteNumber(meta?.regularMarketChange)
+      const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
+      const computedChange = prevClose > 0 ? price - prevClose : 0
+      const change = market === '美股' && metaChange !== undefined && Math.abs(metaChange) > 0.0001
+        ? metaChange
+        : computedChange
+      const changePct = market === '美股' && metaChangePct !== undefined && Math.abs(metaChangePct) > 0.0001
+        ? metaChangePct
+        : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
 
       let trend: number[] = []
       try {
