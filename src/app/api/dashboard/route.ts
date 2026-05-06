@@ -41,6 +41,12 @@ export async function GET(request: Request) {
       snapshots: snapshots.slice(0, 60).reverse(), // 升序給圖表
       distribution,
       timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

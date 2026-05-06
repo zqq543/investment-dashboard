@@ -342,7 +342,9 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async (forceRefresh = false) => {
     try {
-      const res = await fetch(`/api/dashboard${forceRefresh ? '?refresh=1' : ''}`, { cache: 'no-store' })
+      const params = new URLSearchParams({ t: String(Date.now()) })
+      if (forceRefresh) params.set('refresh', '1')
+      const res = await fetch(`/api/dashboard?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`伺服器錯誤 (${res.status})`)
       const json = await res.json()
       if (json.error) throw new Error(json.error)

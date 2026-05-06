@@ -8,7 +8,16 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const status = getCacheStatus()
-  return NextResponse.json({ cache: status, timestamp: new Date().toISOString() })
+  return NextResponse.json(
+    { cache: status, timestamp: new Date().toISOString() },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
+    }
+  )
 }
 
 export async function POST() {
@@ -24,7 +33,16 @@ export async function POST() {
       change: data.change, changePct: data.changePct,
       trend: data.trend,
     }))
-    return NextResponse.json({ data: result, refreshed: result.length, timestamp: new Date().toISOString() })
+    return NextResponse.json(
+      { data: result, refreshed: result.length, timestamp: new Date().toISOString() },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    )
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: '刷新價格失敗', timestamp: new Date().toISOString() }, { status: 500 })
