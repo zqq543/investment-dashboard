@@ -92,21 +92,6 @@ export class YahooFinanceProvider implements PriceProvider {
         secondLastValidClose
       const metaPrevClose = positiveNumber(meta?.previousClose) || positiveNumber(meta?.chartPreviousClose)
       const prevClose = dailyPrevClose || metaPrevClose
-      const metaChange = finiteNumber(meta?.regularMarketChange)
-      const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
-      const computedChange = prevClose > 0 ? price - prevClose : 0
-      const useMetaChange = market === '美股'
-        && metaChange !== undefined
-        && metaChangePct !== undefined
-        && Math.abs(metaChange) > 0.0001
-        && Math.abs(metaChange - computedChange) <= Math.max(0.05, Math.abs(computedChange) * 0.2)
-      const change = useMetaChange
-        ? metaChange
-        : computedChange
-      const changePct = useMetaChange
-        ? metaChangePct
-        : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
-
       let trend: number[] = []
       try {
         const intradayUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=5m&range=5d`
@@ -129,6 +114,31 @@ export class YahooFinanceProvider implements PriceProvider {
       if (trend.length < 2) {
         trend = prevClose > 0 ? [prevClose, price] : valid.slice(-2)
       }
+
+      const trendOpen = trend.find(v => Number.isFinite(v) && v > 0) ?? 0
+      const trendChange = trendOpen > 0 ? price - trendOpen : 0
+      const metaChange = finiteNumber(meta?.regularMarketChange)
+      const metaChangePct = finiteNumber(meta?.regularMarketChangePercent)
+      const computedChange = prevClose > 0 ? price - prevClose : 0
+      const useMetaChange = market === '美股'
+        && metaChange !== undefined
+        && metaChangePct !== undefined
+        && Math.abs(metaChange) > 0.0001
+        && Math.abs(metaChange - computedChange) <= Math.max(0.05, Math.abs(computedChange) * 0.2)
+      const useTrendChange = market === '美股'
+        && !useMetaChange
+        && Math.abs(computedChange) < 0.0001
+        && Math.abs(trendChange) > 0.0001
+      const change = useMetaChange
+        ? metaChange
+        : useTrendChange
+          ? trendChange
+          : computedChange
+      const changePct = useMetaChange
+        ? metaChangePct
+        : useTrendChange && trendOpen > 0
+          ? (trendChange / trendOpen) * 100
+          : (prevClose > 0 ? (computedChange / prevClose) * 100 : 0)
 
       return {
         symbol, price,
