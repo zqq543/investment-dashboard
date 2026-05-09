@@ -580,6 +580,7 @@ export default function DashboardPage() {
               marketFilter={market}
               currentDate={latestSnapDate}
               currentValue={fSum?.totalAsset}
+              pnlHistory={pnlStats.history}
             />
           )}
         </section>
