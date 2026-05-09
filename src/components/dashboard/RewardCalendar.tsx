@@ -72,6 +72,36 @@ function buildAvailableMonths(snapshots: DailySnapshot[], key: SnapshotKey) {
   return Array.from(months).sort()
 }
 
+function snapshotsWithCurrent(
+  snapshots: DailySnapshot[],
+  key: SnapshotKey,
+  currentDate?: string,
+  currentValue?: number
+) {
+  if (!currentDate || currentValue === undefined || currentValue <= 0) return snapshots
+
+  const next = snapshots.map(snapshot => ({ ...snapshot }))
+  const existing = next.find(snapshot => snapshot.date === currentDate)
+  if (existing) {
+    existing[key] = currentValue
+    if (key === 'totalAsset') existing.totalAsset = currentValue
+    return next
+  }
+
+  next.push({
+    id: `current-${currentDate}-${key}`,
+    date: currentDate,
+    cash: 0,
+    stockValue: key === 'totalAsset' ? currentValue : 0,
+    twStockValue: key === 'twStockValue' ? currentValue : 0,
+    usStockValue: key === 'usStockValue' ? currentValue : 0,
+    totalAsset: key === 'totalAsset' ? currentValue : 0,
+    dailyPnl: 0,
+    note: 'current',
+  })
+  return next
+}
+
 function buildEntries(snapshots: DailySnapshot[], key: SnapshotKey) {
   const sorted = [...snapshots]
     .filter(s => valueOf(s, key) > 0)
@@ -209,9 +239,23 @@ function MiniBars({ rows }: { rows: DayReward[][] }) {
   )
 }
 
-export function RewardCalendar({ snapshots, marketFilter }: { snapshots: DailySnapshot[]; marketFilter: MarketFilter }) {
+export function RewardCalendar({
+  snapshots,
+  marketFilter,
+  currentDate,
+  currentValue,
+}: {
+  snapshots: DailySnapshot[]
+  marketFilter: MarketFilter
+  currentDate?: string
+  currentValue?: number
+}) {
   const key = snapshotKey(marketFilter)
-  const availableMonths = useMemo(() => buildAvailableMonths(snapshots, key), [snapshots, key])
+  const effectiveSnapshots = useMemo(
+    () => snapshotsWithCurrent(snapshots, key, currentDate, currentValue),
+    [snapshots, key, currentDate, currentValue]
+  )
+  const availableMonths = useMemo(() => buildAvailableMonths(effectiveSnapshots, key), [effectiveSnapshots, key])
   const latestMonth = availableMonths.at(-1) ?? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   const [selected, setSelected] = useState(latestMonth)
 
@@ -221,7 +265,7 @@ export function RewardCalendar({ snapshots, marketFilter }: { snapshots: DailySn
   }, [availableMonths, selected])
 
   const [year, month] = selected.split('-').map(Number)
-  const entries = useMemo(() => buildEntries(snapshots, key), [snapshots, key])
+  const entries = useMemo(() => buildEntries(effectiveSnapshots, key), [effectiveSnapshots, key])
   const rows = useMemo(() => buildCalendarDays(year, month, entries), [year, month, entries])
   const summary = useMemo(() => calcMonthSummary(rows), [rows])
   const years = useMemo(() => {

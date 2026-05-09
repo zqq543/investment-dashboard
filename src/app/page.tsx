@@ -575,7 +575,12 @@ export default function DashboardPage() {
               <div className="h-80 skeleton rounded-lg" />
             </div>
           ) : (
-            <RewardCalendar snapshots={data?.snapshots ?? []} marketFilter={market} />
+            <RewardCalendar
+              snapshots={data?.snapshots ?? []}
+              marketFilter={market}
+              currentDate={latestSnapDate}
+              currentValue={fSum?.totalAsset}
+            />
           )}
         </section>
 
