@@ -415,7 +415,8 @@ export default function DashboardPage() {
     data?.snapshots ?? [],
     market,
     fSum?.totalAsset,
-    isMarketOpenForKey(getSnapshotKey(market), marketSession)
+    isMarketOpenForKey(getSnapshotKey(market), marketSession),
+    fSum?.todayChange
   )
 
   const s            = fSum

@@ -75,7 +75,8 @@ export function usePnlHistory(
   snapshots: DailySnapshot[],
   market: MarketFilter = 'ALL',
   currentValue?: number,
-  marketOpen = false
+  marketOpen = false,
+  currentDayPnl?: number
 ): PnlStats {
   const [stats, setStats] = useState<PnlStats>({
     today: 0,
@@ -121,7 +122,9 @@ export function usePnlHistory(
 
     const reportDate = getEffectiveReportDate(sorted, key, marketDate, marketOpen, latestValid?.date)
     const previous = sorted.filter(s => s.date < reportDate).at(-1)
-    if (currentValue !== undefined && previous) {
+    if (currentDayPnl !== undefined) {
+      merged.set(reportDate, currentDayPnl)
+    } else if (currentValue !== undefined && previous) {
       merged.set(reportDate, currentValue - previous[key])
     }
 
@@ -161,7 +164,7 @@ export function usePnlHistory(
       yearEnd: yearStart ? reportDate : undefined,
       history,
     })
-  }, [snapshots, market, currentValue, marketOpen])
+  }, [snapshots, market, currentValue, marketOpen, currentDayPnl])
 
   return stats
 }
