@@ -18,26 +18,10 @@ export interface PnlStats {
 
 type SnapshotValueKey = 'totalAsset' | 'twStockValue' | 'usStockValue'
 
-function getStorageKey(market: MarketFilter): string {
-  return `pnl-history-v2-${market}`
-}
-
 function getSnapshotKey(market: MarketFilter): SnapshotValueKey {
   if (market === '台股') return 'twStockValue'
   if (market === '美股') return 'usStockValue'
   return 'totalAsset'
-}
-
-function loadStored(market: MarketFilter): PnlEntry[] {
-  if (typeof window === 'undefined') return []
-  try { return JSON.parse(localStorage.getItem(getStorageKey(market)) ?? '[]') } catch { return [] }
-}
-
-function saveStored(market: MarketFilter, entries: PnlEntry[]) {
-  if (typeof window === 'undefined') return
-  // 只保留最近 365 天
-  const keep = entries.slice(-365)
-  localStorage.setItem(getStorageKey(market), JSON.stringify(keep))
 }
 
 function countMoves(entries: PnlEntry[]) {
@@ -110,15 +94,10 @@ export function usePnlHistory(
       })
     }
 
-    // 合併 localStorage（補充歷史）與 snapshot 計算值
-    const stored = loadStored(market)
+    // PnL 必須只由目前 API snapshots + 即時今日損益生成。
+    // 舊版曾寫入 localStorage，會把已修正前的錯誤台股日損益殘留在使用者瀏覽器。
     const merged = new Map<string, number>()
-    for (const e of stored) merged.set(e.date, e.pnl)
-    for (const e of fromSnapshots) merged.set(e.date, e.pnl) // snapshot 優先
-
-    saveStored(market, Array.from(merged.entries())
-      .map(([date, pnl]) => ({ date, pnl }))
-      .sort((a, b) => a.date.localeCompare(b.date)))
+    for (const e of fromSnapshots) merged.set(e.date, e.pnl)
 
     const reportDate = getEffectiveReportDate(sorted, key, marketDate, marketOpen, latestValid?.date)
     const previous = sorted.filter(s => s.date < reportDate).at(-1)
