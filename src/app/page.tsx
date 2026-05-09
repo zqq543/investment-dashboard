@@ -581,6 +581,7 @@ export default function DashboardPage() {
               currentDate={latestSnapDate}
               currentValue={fSum?.totalAsset}
               pnlHistory={pnlStats.history}
+              currentDayPnl={fSum?.todayChange}
             />
           )}
         </section>

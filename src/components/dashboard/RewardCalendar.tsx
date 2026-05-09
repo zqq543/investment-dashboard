@@ -121,28 +121,38 @@ function buildEntries(snapshots: DailySnapshot[], key: SnapshotKey) {
 function buildEntriesFromPnlHistory(
   snapshots: DailySnapshot[],
   key: SnapshotKey,
-  pnlHistory?: PnlEntry[]
+  pnlHistory?: PnlEntry[],
+  currentDate?: string,
+  currentDayPnl?: number
 ) {
   if (!pnlHistory?.length) return buildEntries(snapshots, key)
+
+  const historyByDate = new Map<string, number>()
+  for (const entry of pnlHistory) {
+    if (Number.isFinite(entry.pnl)) historyByDate.set(entry.date, entry.pnl)
+  }
+  if (currentDate && currentDayPnl !== undefined && Number.isFinite(currentDayPnl)) {
+    historyByDate.set(currentDate, currentDayPnl)
+  }
 
   const sorted = [...snapshots]
     .filter(s => valueOf(s, key) > 0)
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  return pnlHistory
-    .filter(entry => Number.isFinite(entry.pnl))
-    .map(entry => {
+  return Array.from(historyByDate.entries())
+    .map(([date, pnl]) => {
       const previous = sorted
-        .filter(snapshot => snapshot.date < entry.date)
+        .filter(snapshot => snapshot.date < date)
         .at(-1)
       const base = valueOf(previous, key)
       return {
-        date: entry.date,
-        pnl: entry.pnl,
-        pct: base > 0 ? (entry.pnl / base) * 100 : 0,
+        date,
+        pnl,
+        pct: base > 0 ? (pnl / base) * 100 : 0,
         base,
       }
     })
+    .sort((a, b) => a.date.localeCompare(b.date))
 }
 
 function buildCalendarDays(year: number, month: number, entries: ReturnType<typeof buildEntries>) {
@@ -273,12 +283,14 @@ export function RewardCalendar({
   currentDate,
   currentValue,
   pnlHistory,
+  currentDayPnl,
 }: {
   snapshots: DailySnapshot[]
   marketFilter: MarketFilter
   currentDate?: string
   currentValue?: number
   pnlHistory?: PnlEntry[]
+  currentDayPnl?: number
 }) {
   const key = snapshotKey(marketFilter)
   const effectiveSnapshots = useMemo(
@@ -296,8 +308,8 @@ export function RewardCalendar({
 
   const [year, month] = selected.split('-').map(Number)
   const entries = useMemo(
-    () => buildEntriesFromPnlHistory(effectiveSnapshots, key, pnlHistory),
-    [effectiveSnapshots, key, pnlHistory]
+    () => buildEntriesFromPnlHistory(effectiveSnapshots, key, pnlHistory, currentDate, currentDayPnl),
+    [effectiveSnapshots, key, pnlHistory, currentDate, currentDayPnl]
   )
   const rows = useMemo(() => buildCalendarDays(year, month, entries), [year, month, entries])
   const summary = useMemo(() => calcMonthSummary(rows), [rows])
