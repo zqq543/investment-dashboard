@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { IndexQuote, Market } from '@/types'
+import { fetchTwsePriceIndex } from '@/lib/prices/twse'
 
 export const runtime = 'nodejs'
 export const revalidate = 0
@@ -116,9 +117,11 @@ export async function GET(req: Request) {
     default: defs = [...TW_INDICES, ...GLOBAL_INDICES, ...US_INDICES]
   }
 
-  // 預先抓 ^TWII（TX mock 用）
+  // 預先抓官方加權指數（TX mock 用），避免台股休市時 Yahoo 回傳錯日期。
   let twiiData: { price: number; prevClose: number; isStale: boolean } | null = null
-  if (defs.some(d => d.mock)) twiiData = await fetchYahoo('^TWII')
+  if (defs.some(d => d.mock) || defs.some(d => d.symbol === '^TWII')) {
+    twiiData = await fetchTwsePriceIndex('發行量加權股價指數') ?? await fetchYahoo('^TWII')
+  }
 
   const settled = await Promise.allSettled(
     defs.map(async (idx): Promise<(IndexQuote & { row: number }) | null> => {
@@ -142,6 +145,12 @@ export async function GET(req: Request) {
         const change    = data.prevClose > 0 ? data.price - data.prevClose : 0
         const changePct = data.prevClose > 0 ? (change / data.prevClose) * 100 : 0
         return { symbol: idx.symbol, name: idx.name, price: data.price, change, changePct, market: idx.market, currency: idx.currency, isStale: data.isStale, row: idx.row }
+      }
+      if (idx.symbol === '^TWII') {
+        if (!twiiData) return null
+        const change    = twiiData.prevClose > 0 ? twiiData.price - twiiData.prevClose : 0
+        const changePct = twiiData.prevClose > 0 ? (change / twiiData.prevClose) * 100 : 0
+        return { symbol: idx.symbol, name: idx.name, price: twiiData.price, change, changePct, market: idx.market, currency: idx.currency, isStale: twiiData.isStale, row: idx.row }
       }
       // TX mock
       if (idx.mock) {

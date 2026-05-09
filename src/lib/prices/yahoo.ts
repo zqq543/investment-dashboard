@@ -1,5 +1,6 @@
 import type { PriceProvider } from './types'
 import type { PriceData, Market } from '@/types'
+import { fetchTwseStockPrice } from './twse'
 
 function positiveNumber(value: unknown): number {
   const n = Number(value)
@@ -85,6 +86,11 @@ export class YahooFinanceProvider implements PriceProvider {
   }
 
   async fetchPrice(symbol: string, market: Market): Promise<PriceData | null> {
+    if (market === '台股' && !symbol.startsWith('^')) {
+      const twse = await fetchTwseStockPrice(symbol)
+      if (twse) return twse
+    }
+
     // 日線負責前收與今日漲跌；分時資料另抓，供持股清單顯示今日趨勢。
     const range = '1mo'
     const yahooSymbol = this.toYahooSymbol(symbol, market)
