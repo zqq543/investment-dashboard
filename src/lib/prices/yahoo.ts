@@ -1,11 +1,6 @@
 import type { PriceProvider } from './types'
 import type { PriceData, Market } from '@/types'
 
-function isWeekend(): boolean {
-  const day = new Date().getDay()
-  return day === 0 || day === 6
-}
-
 function positiveNumber(value: unknown): number {
   const n = Number(value)
   return Number.isFinite(n) && n > 0 ? n : 0
@@ -14,6 +9,28 @@ function positiveNumber(value: unknown): number {
 function finiteNumber(value: unknown): number | undefined {
   const n = Number(value)
   return Number.isFinite(n) ? n : undefined
+}
+
+function marketIsOpen(market: Market, now = new Date()) {
+  const timeZone = market === '台股' ? 'Asia/Taipei' : 'America/New_York'
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(get('weekday'))
+  const minutes = Number(get('hour')) * 60 + Number(get('minute'))
+  if (weekday < 1 || weekday > 5) return false
+  if (market === '台股' && new Set(['01-01', '02-28', '04-04', '05-01', '10-10']).has(`${get('month')}-${get('day')}`)) {
+    return false
+  }
+  if (market === '台股') return minutes >= 9 * 60 && minutes <= 13 * 60 + 30
+  return minutes >= 9 * 60 + 30 && minutes <= 16 * 60
 }
 
 export class YahooFinanceProvider implements PriceProvider {
@@ -89,13 +106,16 @@ export class YahooFinanceProvider implements PriceProvider {
       const closes = (chart?.indicators?.quote?.[0]?.close ?? []) as Array<number | null>
       const valid  = closes.filter((v): v is number => v != null && v > 0)
 
-      // 週末強制用最後收盤，不用 regularMarketPrice，避免休市日產生假更新。
+      // 休市時強制用最後交易日日線收盤，不用 quote regularMarketPrice。
+      // Vercel 執行區域不在台灣，不能用伺服器本地日期判斷週末。
       const quotePrice = positiveNumber(quote?.regularMarketPrice)
-      const price = isWeekend()
-        ? (quotePrice || valid[valid.length - 1] || 0)
+      const isOpen = marketIsOpen(market)
+      const lastDailyClose = valid[valid.length - 1] || 0
+      const price = !isOpen
+        ? lastDailyClose
         : (quotePrice ||
            positiveNumber(meta?.regularMarketPrice) ||
-           valid[valid.length - 1] ||
+           lastDailyClose ||
            positiveNumber(meta?.previousClose) || 0)
 
       if (price <= 0) return null
